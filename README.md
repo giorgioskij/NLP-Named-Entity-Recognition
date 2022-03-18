@@ -6,8 +6,15 @@ This is the first homework of the NLP 2022 course at Sapienza University of Rome
 	* Webpage: http://wwwusers.di.uniroma1.it/~navigli/
 
 #### Teaching Assistants
-* **NULL**
+* **Andrea Bacciu**
+* **Andrei Stefan Bejgu**
+* **Valerio Neri**
+* **Riccardo Orlando**
+* **Alessandro Scirè**
+* **Simone Tedeschi**
 
+**Teaching assistants emails:**
+{bacciu, bejgu, neri, orlando, scire, tedeschi}@diag.uniroma1.it
 
 #### Course Info
 * http://naviglinlp.blogspot.com/
