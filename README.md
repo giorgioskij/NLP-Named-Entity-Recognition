@@ -1,11 +1,11 @@
-# NLP-2022: First Homework
+# NLP 2022: Homework #1
 
 This is the first homework of the NLP 2022 course at Sapienza University of Rome.
 
 #### Instructor
 
 * **Roberto Navigli**
-  * Webpage: http://wwwusers.di.uniroma1.it/~navigli/
+  * Webpage: http://www.diag.uniroma1.it/~navigli/
 
 #### Teaching Assistants
 
