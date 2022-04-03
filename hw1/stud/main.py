@@ -30,7 +30,7 @@ lstm.train(model,
           devloader,
           optimizer,
           patience=1,
-          epochs=50,
+          epochs=10,
           log_steps=100,
           device = device,
           save_path=pathlib.Path('../../model/'))

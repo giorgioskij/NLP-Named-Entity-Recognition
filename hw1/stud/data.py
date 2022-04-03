@@ -7,6 +7,7 @@ from tqdm import tqdm
 from typing import  List, Tuple, Dict
 from collections import Counter
 from pathlib import Path
+import pickle
 
 
 class Vocabulary():
@@ -15,8 +16,9 @@ class Vocabulary():
     """
 
     def __init__(self,
-                 sentences: List[Tuple[List[str], List[str]]],
-                 threshold: int = 1):
+                 sentences: List[Tuple[List[str], List[str]]] = None,
+                 threshold: int = 1,
+                 path: str = None):
         """Initialize the vocabulary from a dataset
 
         Args:
@@ -30,22 +32,31 @@ class Vocabulary():
                 be inserted in the dictionary. Defaults to 1.
         """
 
+        if path is None and sentences is None:
+            raise ValueError('To build a vocabulary you must give either a '
+                             'list of sentences or a path to a dump.')
+
         self.threshold: int = threshold
-        self.counts: Counter = Counter()
-        self.lcounts: Counter  = Counter()
+
+        # load from dump
+        if path is not None:
+            self.counts, self.lcounts = self.load_counts(path)
+        # build from sentences
+        else:
+            self.counts: Counter = Counter()
+            self.lcounts: Counter  = Counter()
+            for sentence, labels in sentences:
+                for word, label in zip(sentence, labels):
+                    self.counts[word] += 1
+                    self.lcounts[label] += 1
+
+                    if label == 'id':
+                        print(f'{sentence=}')
+                        print(f'{labels=}')
 
         # unk and pad symbols
         self.unk_symbol = '<unk>'
         self.pad_symbol = '<pad>'
-
-        for sentence, labels in sentences:
-            for word, label in zip(sentence, labels):
-                self.counts[word] += 1
-                self.lcounts[label] += 1
-
-                if label == 'id':
-                    print(f'{sentence=}')
-                    print(f'{labels=}')
 
         # word vocabularies
         self.itos: List[str] = sorted(list(
@@ -61,12 +72,33 @@ class Vocabulary():
         self.unk: int = self.stoi[self.unk_symbol]
         self.pad: int = self.stoi[self.pad_symbol]
 
-
     def __contains__(self, word: str):
         return word in self.stoi
 
     def __len__(self):
         return len(self.itos)
+
+    def load_counts(self, path: str):
+        """Loads self.counts and self.lcounts from a previous dump
+
+        Args:
+            path (str): the path to the pickle dump
+
+        Returns:
+            counts, lcounts: Counters of words and labels
+        """
+        with open(path, 'rb') as f:
+            counts, lcounts = pickle.load(f)
+        return counts, lcounts
+
+    def dump_counts(self, path: str):
+        """Dumps self.counts and self.lcounts as pickle objects
+
+        Args:
+            path (str): the path of the dump
+        """
+        with open(path, 'wb') as f:
+            pickle.dump((self.counts, self.lcounts), f)
 
     def get_word(self, idx: int) -> str:
         """Return the word at a given index

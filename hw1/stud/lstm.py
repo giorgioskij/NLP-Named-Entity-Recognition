@@ -53,7 +53,7 @@ def train(
     log_steps: int = 100,
     verbose: bool = True,
     device: str = None,
-    save_path: pathlib.Path = '../../model/'
+    save_path: pathlib.Path = pathlib.Path('../../model/')
     ) -> str:
 
     if device is None:
@@ -112,7 +112,7 @@ def train(
 
     model_name = f'{accuracy:.4f}'[2:]
     path = save_path / f'{model_name}lstm.pth'
-    torch.save(model.state_dict(), save_path)
+    torch.save(model.state_dict(), path)
     print(f'Saved model at {path}')
 
     return model

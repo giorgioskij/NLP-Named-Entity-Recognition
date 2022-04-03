@@ -3,11 +3,22 @@ from typing import List, Tuple
 
 from model import Model
 
+###
+from . import lstm
+from . import data
+import torch
+import pickle
+###
+
 
 def build_model(device: str) -> Model:
     # STUDENT: return StudentModel()
     # STUDENT: your model MUST be loaded on the device "device" indicates
-    return RandomBaseline()
+    # return RandomBaseline()
+
+    print('building model')
+
+    return StudentModel(device=device)
 
 
 class RandomBaseline(Model):
@@ -44,7 +55,41 @@ class StudentModel(Model):
     # STUDENT: construct here your model
     # this class should be loading your weights and vocabulary
 
+
+    ###
+    def __init__(self, device: str = None):
+
+        self.device = device
+        if self.device is None:
+            self.device = "cuda:0" if torch.cuda.is_available() else "cpu"
+
+        self.vocab = data.Vocabulary(threshold=2, path='model/vocab.pkl')
+
+        self.model: lstm.NerModel = lstm.NerModel(
+            n_classes=13,
+            embedding_dim=100,
+            vocab_size=len(self.vocab),
+            padding_idx=self.vocab.pad,
+            hidden_size=100
+        ).to(device)
+
+        self.model.load_state_dict(torch.load('model/8344lstm.pth'))
+    ###
+
+
     def predict(self, tokens: List[List[str]]) -> List[List[str]]:
         # STUDENT: implement here your predict function
         # remember to respect the same order of tokens!
-        pass
+
+        labels = []
+
+        for sentence in tokens:
+            inputs = torch.tensor(
+                [self.vocab[word] for word in sentence]
+            ).unsqueeze(0).to(self.device)
+            outputs = self.model(inputs)
+            predictions = torch.argmax(outputs, dim = -1).flatten()
+            str_predictions = [self.vocab.get_label(p) for p in predictions]
+            labels.append(str_predictions)
+
+        return labels
