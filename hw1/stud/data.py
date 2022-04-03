@@ -57,6 +57,7 @@ class Vocabulary():
         # unk and pad symbols
         self.unk_symbol = '<unk>'
         self.pad_symbol = '<pad>'
+        self.pad_label = 'PAD'
 
         # word vocabularies
         self.itos: List[str] = sorted(list(
@@ -66,11 +67,12 @@ class Vocabulary():
             s: i for i, s in enumerate(self.itos)}
 
         # label vocabularies
-        self.ltos: List[str] = sorted(list(self.lcounts.keys()))
+        self.ltos: List[str] = sorted(list(self.lcounts.keys()) + ['PAD'])
         self.stol: Dict[str, int] = {s: i for i, s in enumerate(self.ltos)}
 
         self.unk: int = self.stoi[self.unk_symbol]
         self.pad: int = self.stoi[self.pad_symbol]
+        self.n_labels: int = len(self.ltos)
 
     def __contains__(self, word: str):
         return word in self.stoi
@@ -160,7 +162,7 @@ class NerDataset(torch.utils.data.Dataset):
                  path: Path = Path('../../data/train.tsv'),
                  vocab: Vocabulary = None,
                  threshold: int = 2,
-                 window_size: int = 7,
+                 window_size: int = 100,
                  window_shift: int = None):
         """
         Build a Named Entity Recognition dataset from a .tsv file,
@@ -226,6 +228,9 @@ class NerDataset(torch.utils.data.Dataset):
                 else:
                     words.append(line[0])
                     labels.append(line[1])
+
+            # last sentence
+            sentences.append((words, labels))
         return sentences
 
     def index_data(self) -> List[Tuple[List[int], List[int]]]:
@@ -264,7 +269,7 @@ class NerDataset(torch.utils.data.Dataset):
                     [self.vocab.pad] *
                     (self.window_size - len(word_window)))
                 label_window += (
-                    [self.vocab.get_label_id('O')] *
+                    [self.vocab.get_label_id(self.vocab.pad_label)] *
                     (self.window_size - len(label_window)))
                 # append
                 windows.append(
@@ -272,6 +277,12 @@ class NerDataset(torch.utils.data.Dataset):
                     torch.tensor(label_window)))
                 start += self.window_shift
         return windows
+
+    # def get_window(self, idx):
+    #     return self.windows[idx]
+
+    # def get_window_count(self):
+    #     return len(self.windows)
 
     def __len__(self):
         return len(self.windows)
@@ -282,7 +293,8 @@ class NerDataset(torch.utils.data.Dataset):
 
 def get_dataloaders(trainset: NerDataset,
                     devset: NerDataset,
-                    batch_size: int = 64):
+                    batch_size_train: int = 128,
+                    batch_size_dev: int = 256):
     """Return the dataloaders from the given datasets
 
     Args:
@@ -295,8 +307,8 @@ def get_dataloaders(trainset: NerDataset,
     """
     return (
         torch.utils.data.DataLoader(trainset,
-                                    batch_size=batch_size,
+                                    batch_size=batch_size_train,
                                     shuffle=True),
         torch.utils.data.DataLoader(devset,
-                                    batch_size=batch_size * 2),
+                                    batch_size=batch_size_dev),
     )

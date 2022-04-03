@@ -73,7 +73,10 @@ class StudentModel(Model):
             hidden_size=100
         ).to(device)
 
-        self.model.load_state_dict(torch.load('model/8344lstm.pth'))
+        self.model.load_state_dict(torch.load(
+            'model/03Apr-23:37.pth',
+            map_location=torch.device(device)
+        ))
     ###
 
 
@@ -82,6 +85,8 @@ class StudentModel(Model):
         # remember to respect the same order of tokens!
 
         labels = []
+
+        self.model.eval()
 
         for sentence in tokens:
             inputs = torch.tensor(
