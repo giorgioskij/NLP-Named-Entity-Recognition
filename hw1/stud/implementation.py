@@ -70,11 +70,12 @@ class StudentModel(Model):
             embedding_dim=100,
             vocab_size=len(self.vocab),
             padding_idx=self.vocab.pad,
-            hidden_size=100
+            hidden_size=100,
+            bidirectional=False
         ).to(device)
 
         self.model.load_state_dict(torch.load(
-            'model/03Apr-23:37.pth',
+            'model/4407.pth',
             map_location=torch.device(device)
         ))
     ###

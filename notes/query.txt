@@ -1,0 +1,29 @@
+# POPULAR SURNAMES
+# SELECT ?surname ?surnameLabel ?count
+# WHERE
+# {
+#   {
+#     SELECT ?surname (COUNT(?human) AS ?count) WHERE {
+#     # ?human wdt:P31 wd:Q5.
+#       ?human wdt:P734 ?surname.
+#     }
+#     GROUP BY ?surname ORDER BY DESC(?count) LIMIT 100
+#   }
+#   SERVICE wikibase:label { bd:serviceParam wikibase:language "[AUTO_LANGUAGE],en". }
+# } 
+# ORDER BY DESC(?count)
+
+# POPULAR NAMES
+# SELECT ?name ?nameLabel ?count
+# WHERE
+# {
+#   {
+#     SELECT ?name (COUNT(?human) AS ?count) WHERE {
+# #       ?human wdt:P31 wd:Q5.
+#       ?human wdt:P735 ?name.
+#     }
+#     GROUP BY ?name ORDER BY DESC(?count) LIMIT 1000
+#   }
+#   SERVICE wikibase:label { bd:serviceParam wikibase:language "[AUTO_LANGUAGE],en". }
+# } 
+# ORDER BY DESC(?count)

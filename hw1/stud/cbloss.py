@@ -1,8 +1,3 @@
-import torch
-import torch.nn.functional as F
-import torch.nn as nn
-import numpy as np
-
 """All credits to:
     Pytorch implementation of Class-Balanced-Loss
     Reference: "Class-Balanced Loss Based on Effective Number of Samples" 
@@ -14,8 +9,15 @@ import numpy as np
     https://arxiv.org/abs/1901.05555, CVPR'19.
 """
 
-"""Modified by me
+"""Modified by EMUNES: 
+https://github.com/EMUNES/pytorch-made-class-balanced-loss
 """
+
+import torch
+import torch.nn.functional as F
+import torch.nn as nn
+import numpy as np
+
 
 def get_device():
     return torch.device('cuda') if torch.cuda.is_available() else torch.device('cpu')

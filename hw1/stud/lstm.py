@@ -19,7 +19,8 @@ class NerModel(nn.Module):
                  embedding_dim: int,
                  vocab_size: int,
                  padding_idx: int,
-                 hidden_size: int):
+                 hidden_size: int,
+                 bidirectional: bool = False):
         super().__init__()
 
         self.embedding = nn.Embedding(
@@ -31,10 +32,10 @@ class NerModel(nn.Module):
             input_size=embedding_dim,
             hidden_size=hidden_size,
             batch_first=True,
-            bidirectional=False)
+            bidirectional=bidirectional)
 
         self.linear = nn.Linear(
-            in_features=hidden_size,
+            in_features=hidden_size*2 if bidirectional else hidden_size,
             out_features=n_classes)
 
         self.dropout = nn.Dropout()
@@ -61,6 +62,7 @@ def train(
     devloader: torch.utils.data.DataLoader,
     optimizer: torch.optim.Optimizer,
     vocab,
+    loss_fn: nn.Module = None,
     patience: int = 1,
     epochs: int = 50,
     log_steps: int = 100,
@@ -74,11 +76,13 @@ def train(
     model.to(device)
     path = save_path / f"{datetime.now().strftime('%d%b-%H:%M')}.pth"
     current_patience: int = patience
-    best_f1_score = 0
+    best_f1_score, best_epoch = 0, 0
     previous_accuracy = 0
     pad_label_id = vocab.get_label_id('PAD')
-    loss_fn = nn.CrossEntropyLoss(
-        ignore_index=pad_label_id, reduction='sum')
+
+    if loss_fn is None:
+        loss_fn = nn.CrossEntropyLoss(
+            ignore_index=pad_label_id, reduction='sum')
 
     for epoch in range(epochs):
 
@@ -107,7 +111,8 @@ def train(
             total_correct += correct
             total_count += len(real_labels)
 
-            if log_steps is not None and ((i+1) % log_steps) == 0:
+            if (verbose and log_steps is not None
+                and ((i+1) % log_steps) == 0):
                 print(
                     f'| epoch {epoch+1:3d} '
                     f'| {i+1:3d}/{len(trainloader):3d} batches '
@@ -129,6 +134,7 @@ def train(
 
         # save the best model
         if f1 > best_f1_score:
+            best_epoch = epoch+1
             best_f1_score = f1
             torch.save(model.state_dict(), path)
 
@@ -141,16 +147,23 @@ def train(
             if current_patience < 0: break
             previous_accuracy = accuracy
 
-        print('-' * 59)
-        print(
-            f'| end of epoch {epoch+1:3d} '
-            f'| time: {time.time() - epoch_start_time:5.2f}s '
-            f'| valid accuracy {accuracy:.2%} '
-            f'| valid F1-score {f1:.2%}'
-        )
-        print('-' * 59)
+        if verbose:
+            if log_steps is not None: print('-' * 59)
+            print(
+                f'| end of epoch {epoch+1:3d} '
+                f'| time: {time.time() - epoch_start_time:5.2f}s '
+                f'| valid accuracy {accuracy:.2%} '
+                f'| valid F1-score {f1:.2%}'
+            )
+            if log_steps is not None: print('-' * 59)
 
-    print(f'Saved best model at {path}')
+
+    if verbose: print(
+        f'Saved model from epoch {best_epoch} '
+        f'with f1 {best_f1_score:.2%} at {path}')
+
+    model.load_state_dict(torch.load(path))
+
     return model
 
 
@@ -169,6 +182,14 @@ def step(
 
     if optimizer is not None:
         loss.backward()
+
+        # CAREFUL - MANUAL WEIGHT UPDATE
+        # with torch.no_grad():
+        #     lr = 0.01
+        #     for param in model.parameters():
+        #         param -=  param.grad * lr
+        #         param.grad.zero_()
+
         optimizer.step()
         optimizer.zero_grad()
 
