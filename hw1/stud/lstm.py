@@ -102,51 +102,56 @@ def train(
     path = params.save_path / f"{datetime.now().strftime('%d%b-%H:%M')}.pth"
     best_score, best_epoch = 0, 0
 
-    for epoch in range(params.epochs):
-        if params.verbose and params.log_steps is not None:
-            print(f'Starting epoch {epoch + 1}...')
-        epoch_start_time = time.time()
+    try:
+        for epoch in range(params.epochs):
+            if params.verbose and params.log_steps is not None:
+                print(f'Starting epoch {epoch + 1}...')
+            epoch_start_time = time.time()
 
-        # train for an epoch
-        model.train()
-        _, _, train_f1 = run_epoch(
-            model=model,
-            dataloader=trainloader,
-            params=params)
+            # train for an epoch
+            model.train()
+            _, _, train_f1 = run_epoch(
+                model=model,
+                dataloader=trainloader,
+                params=params)
 
-        # test the model
-        model.eval()
-        accuracy, loss, f1 = run_epoch(
-            model=model,
-            dataloader=devloader,
-            params=params,
-            evaluate=True)
+            # test the model
+            model.eval()
+            accuracy, loss, f1 = run_epoch(
+                model=model,
+                dataloader=devloader,
+                params=params,
+                evaluate=True)
 
-        # save the best model
-        metric = accuracy if model.binary else f1
-        if metric > best_score:
-            best_epoch = epoch+1
-            best_score = metric
-            torch.save(model.state_dict(), path)
+            # save the best model
+            metric = accuracy if model.binary else f1
+            if metric > best_score:
+                best_epoch = epoch+1
+                best_score = metric
+                torch.save(model.state_dict(), path)
 
-        if params.verbose:
-            if params.log_steps is not None: print('-' * 59)
-            print(
-                f'| End of epoch {epoch+1:3d} '
-                f'| Time: {time.time() - epoch_start_time:5.2f}s '
-                f'| Eval acc {accuracy:.2%}',
-                (f'| Eval loss {loss:.4f} '
-                if model.binary else
-                f'| Eval f1 {f1:5.2%}'),
-                f'| Train f1 {train_f1:5.2%}',
-            )
-            if params.log_steps is not None: print('-' * 59)
+            if params.verbose:
+                if params.log_steps is not None: print('-' * 59)
+                print(
+                    f'| End of epoch {epoch+1:3d} '
+                    f'| Time: {time.time() - epoch_start_time:5.2f}s '
+                    f'| Eval acc {accuracy:.2%}',
+                    (f'| Eval loss {loss:.4f} '
+                    if model.binary else
+                    f'| Eval f1 {f1:5.2%}'),
+                    f'| Train f1 {train_f1:5.2%}',
+                )
+                if params.log_steps is not None: print('-' * 59)
 
-    if params.verbose: print(
-        f'Saved model from epoch {best_epoch} '
-        f'with score {best_score:.2%} at {path}')
+        if params.verbose: print(
+            f'Saved model from epoch {best_epoch} '
+            f'with score {best_score:.2%} at {path}')
 
-    model.load_state_dict(torch.load(path))
+        model.load_state_dict(torch.load(path))
+    except KeyboardInterrupt:
+        print('Stopping training...')
+        print(f'Model from epoch {best_epoch} '
+              f'with score {best_score:.2%} is saved at {path}')
     return None
 
 

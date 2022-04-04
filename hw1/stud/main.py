@@ -58,11 +58,11 @@ params = lstm.TrainParams(optimizer=optimizer,
                           save_path=pathlib.Path('../../model/'))
 
 # train
-train = True
+train = False
 if train:
     lstm.train(model, trainloader, devloader, params)
 else:
-    model.load_state_dict(torch.load('../../model/4407.pth'))
+    model.load_state_dict(torch.load('../../model/6033bi.pth'))
 
 
 
