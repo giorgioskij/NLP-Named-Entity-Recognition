@@ -1,0 +1,9 @@
+Only edit:
+
+- hw1/stud/*
+- model/*
+- requirements.txt
+
+REMEMBER TO TURN THE MAX_TRIES BACK TO 10 IN EVALUATE.PY
+
+stanza to compute POS - various data preprocessing
