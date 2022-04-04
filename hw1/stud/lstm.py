@@ -2,12 +2,27 @@
 Implements Deep Learning-related stuff to perform Named Entity Classification
 """
 
+from typing import Tuple
 import torch
 from torch import nn
 import time
 import pathlib
 from datetime import datetime
 from seqeval import metrics
+from dataclasses import dataclass
+
+
+@dataclass
+class TrainParams():
+    optimizer: torch.optim.Optimizer
+    vocab: any
+    loss_fn: nn.Module
+    epochs: int
+    log_steps: int
+    verbose: bool
+    device: str
+    f1_average: str
+    save_path: pathlib.Path
 
 
 class NerModel(nn.Module):
@@ -20,13 +35,25 @@ class NerModel(nn.Module):
                  vocab_size: int,
                  padding_idx: int,
                  hidden_size: int,
-                 bidirectional: bool = False):
+                 bidirectional: bool = False,
+                 pretrained_emb: torch.tensor = None):
         super().__init__()
 
-        self.embedding = nn.Embedding(
-            num_embeddings=vocab_size,
-            embedding_dim=embedding_dim,
-            padding_idx=padding_idx)
+        self.binary: bool = n_classes <= 2
+
+
+        if pretrained_emb is not None:
+            self.embedding = nn.Embedding.from_pretrained(
+                embeddings=pretrained_emb,
+                freeze=True,
+                padding_idx=padding_idx,
+            )
+        else:
+            self.embedding = nn.Embedding(
+                num_embeddings=vocab_size,
+                embedding_dim=embedding_dim,
+                padding_idx=padding_idx,
+                )
 
         self.lstm = nn.LSTM(
             input_size=embedding_dim,
@@ -60,111 +87,154 @@ def train(
     model: nn.Module,
     trainloader: torch.utils.data.DataLoader,
     devloader: torch.utils.data.DataLoader,
-    optimizer: torch.optim.Optimizer,
-    vocab,
-    loss_fn: nn.Module = None,
-    patience: int = 1,
-    epochs: int = 50,
-    log_steps: int = 100,
-    verbose: bool = True,
-    device: str = 'cpu',
-    early_stop: bool = True,
-    f1_average: str = 'macro',
-    save_path: pathlib.Path = pathlib.Path('../../model/')
-    ) -> str:
+    params: TrainParams
+) -> None:
+    """Trains the model
 
-    model.to(device)
-    path = save_path / f"{datetime.now().strftime('%d%b-%H:%M')}.pth"
-    current_patience: int = patience
-    best_f1_score, best_epoch = 0, 0
-    previous_accuracy = 0
-    pad_label_id = vocab.get_label_id('PAD')
+    Args:
+        model (nn.Module): the model to train
+        trainloader (nn.utils.data.DataLoader): dataloader for training
+        devloader (nn.utils.data.DataLoader): dataloader for evaluation
+        params (TrainParams): parameters
+    """
 
-    if loss_fn is None:
-        loss_fn = nn.CrossEntropyLoss(
-            ignore_index=pad_label_id, reduction='sum')
+    model.to(params.device)
+    path = params.save_path / f"{datetime.now().strftime('%d%b-%H:%M')}.pth"
+    best_score, best_epoch = 0, 0
 
-    for epoch in range(epochs):
+    for epoch in range(params.epochs):
+        if params.verbose and params.log_steps is not None:
+            print(f'Starting epoch {epoch + 1}...')
+        epoch_start_time = time.time()
 
         # train for an epoch
         model.train()
-        total_correct, total_count, total_loss = 0, 0, 0
-        epoch_start_time = time.time()
-        if verbose and log_steps is not None:
-            print(f'Starting epoch {epoch + 1}...')
-        for i, data in enumerate(trainloader):
-
-            # forward and backpropagation
-            inputs, labels = data[0].to(device), data[1].flatten().to(device)
-            loss, outputs = step(model, loss_fn, inputs, labels, optimizer)
-
-            # evaluate predictions
-            predictions = torch.argmax(outputs, dim=1)
-
-            # exclude padding from stats
-            real_predictions = predictions[labels != pad_label_id]
-            real_labels = labels[labels != pad_label_id]
-            correct = (real_predictions == real_labels).sum().item()
-
-            # update stats
-            total_loss += loss
-            total_correct += correct
-            total_count += len(real_labels)
-
-            if (verbose and log_steps is not None
-                and ((i+1) % log_steps) == 0):
-                print(
-                    f'| epoch {epoch+1:3d} '
-                    f'| {i+1:3d}/{len(trainloader):3d} batches '
-                    f'| accuracy {total_correct / total_count:.2%}'
-                    f'| training loss {loss / i:.4f}'
-                    f'| elapsed: {time.time() - epoch_start_time:5.2f}'
-                )
-                total_correct, total_count, total_loss = 0, 0, 0
+        _, _, train_f1 = run_epoch(
+            model=model,
+            dataloader=trainloader,
+            params=params)
 
         # test the model
         model.eval()
-        accuracy, loss, f1 = test(model,
-                                  devloader,
-                                  vocab=vocab,
-                                  loss_fn=loss_fn,
-                                  device=device,
-                                  f1_average=f1_average,
-                                  verbose=False)
+        accuracy, loss, f1 = run_epoch(
+            model=model,
+            dataloader=devloader,
+            params=params,
+            evaluate=True)
 
         # save the best model
-        if f1 > best_f1_score:
+        metric = accuracy if model.binary else f1
+        if metric > best_score:
             best_epoch = epoch+1
-            best_f1_score = f1
+            best_score = metric
             torch.save(model.state_dict(), path)
 
-        # early stopping
-        if early_stop:
-            if accuracy < previous_accuracy:
-                current_patience -= 1
-            else:
-                current_patience = patience
-            if current_patience < 0: break
-            previous_accuracy = accuracy
-
-        if verbose:
-            if log_steps is not None: print('-' * 59)
+        if params.verbose:
+            if params.log_steps is not None: print('-' * 59)
             print(
-                f'| end of epoch {epoch+1:3d} '
-                f'| time: {time.time() - epoch_start_time:5.2f}s '
-                f'| valid accuracy {accuracy:.2%} '
-                f'| valid F1-score {f1:.2%}'
+                f'| End of epoch {epoch+1:3d} '
+                f'| Time: {time.time() - epoch_start_time:5.2f}s '
+                f'| Eval acc {accuracy:.2%}',
+                (f'| Eval loss {loss:.4f} '
+                if model.binary else
+                f'| Eval f1 {f1:5.2%}'),
+                f'| Train f1 {train_f1:5.2%}',
             )
-            if log_steps is not None: print('-' * 59)
+            if params.log_steps is not None: print('-' * 59)
 
-
-    if verbose: print(
+    if params.verbose: print(
         f'Saved model from epoch {best_epoch} '
-        f'with f1 {best_f1_score:.2%} at {path}')
+        f'with score {best_score:.2%} at {path}')
 
     model.load_state_dict(torch.load(path))
+    return None
 
-    return model
+
+def run_epoch(
+    model: nn.Module,
+    dataloader: torch.utils.data.DataLoader,
+    params: TrainParams,
+    evaluate: bool = False
+) -> Tuple[float, float, float]:
+    """Runs a single epoch on the given dataloader
+
+    Args:
+        index (int): Index of the current epoch to display
+        model (nn.Module): model to use
+        dataloader (torch.utils.data.DataLoader): dataloader to use
+        params (TrainParams): parameters
+        test (bool): if it's an evaluation epoch
+
+    Returns:
+        Tuple[float, float, float]: accuracy, loss, f1 score
+    """
+
+    model.to(params.device)
+    if evaluate: model.eval()
+
+    total_correct, total_count, total_loss = 0, 0, 0
+    true_labels = []
+    predicted_labels = []
+
+    for i, data in enumerate(dataloader):
+
+        # move data to gpu
+        inputs, labels = (data[0].to(params.device),
+                          data[1].to(params.device).flatten())
+        # if model is a detector, convert the labels
+        if model.binary:
+            # 'O' -> 0, 'PAD' -> 2, else -> 1
+            not_o = (labels!=params.vocab.get_label_id('O')).long()
+            pad = (labels==params.vocab.pad_label_id).long()
+            labels = not_o + pad
+
+        # forward and backward pass
+        loss, outputs = step(
+            model,
+            params.loss_fn,
+            inputs,
+            labels,
+            params.optimizer if not evaluate else None
+        )
+
+        # evaluate predictions
+        predictions = torch.argmax(outputs, dim=1)
+
+        # exclude padding from stats
+        real_predictions = predictions[labels!=params.vocab.pad_label_id]
+        real_labels = labels[labels!=params.vocab.pad_label_id]
+        correct = (real_predictions == real_labels).sum().item()
+
+        # update stats
+        total_loss += loss
+        total_correct += correct
+        total_count += len(real_labels)
+        predicted_labels.extend(real_predictions.tolist())
+        true_labels.extend(real_labels.tolist())
+
+        if (params.verbose and params.log_steps is not None
+        and ((i+1) % params.log_steps) == 0):
+            print(
+
+                f'| {i+1:3d}/{len(dataloader):3d} batches '
+                f'| accuracy {total_correct / total_count:.2%}'
+                f'| loss {loss / i:.4f}'
+            )
+            total_correct, total_count, total_loss = 0, 0, 0
+
+    accuracy = total_correct / total_count
+    loss = total_loss / len(dataloader)
+
+    f1 = 0
+    if not model.binary:
+        f1 = metrics.f1_score(
+            [[params.vocab.get_label(i) for i in true_labels]],
+            [[params.vocab.get_label(i) for i in predicted_labels]],
+            average=params.f1_average)
+
+    return accuracy, loss, f1
+
+
 
 
 def step(
@@ -198,58 +268,12 @@ def step(
 
 def test(
     model: nn.Module,
-    devloader: torch.utils.data.DataLoader,
-    vocab,
-    loss_fn: nn.Module = None,
-    f1_average: str = 'macro',
-    pad_label_id: int = 13,
-    device: str = 'cpu',
-    verbose: bool = True):
+    dataloader: torch.utils.data.DataLoader,
+    params: TrainParams
+):
+    acc, loss, f1 = run_epoch(model, dataloader, params, True)
 
-    pad_label_id = vocab.get_label_id(vocab.pad_label)
-
-    if loss_fn is None:
-        loss_fn = nn.CrossEntropyLoss(
-            ignore_index=pad_label_id, reduction='sum')
-
-    model.to(device)
-    model.eval()
-
-    total_count, total_correct, total_loss = 0, 0, 0
-
-    true_labels = []
-    predicted_labels = []
-
-    for data in devloader:
-        # forward pass
-        inputs, labels = data[0].to(device), data[1].flatten().to(device)
-        loss, outputs = step(model, loss_fn, inputs, labels)
-
-        # evaluate predictions
-        predictions = torch.argmax(outputs, dim=1)
-
-        # exclude padding from stats
-        real_predictions = predictions[labels != pad_label_id]
-        real_labels = labels[labels != pad_label_id]
-        correct = (real_predictions == real_labels).sum().item()
-
-        # update stats
-        total_loss += loss
-        total_correct += correct
-        total_count += len(real_labels)
-
-        predicted_labels.extend(real_predictions.tolist())
-        true_labels.extend(real_labels.tolist())
-
-
-    accuracy = total_correct / total_count
-    loss = total_loss / len(devloader)
-
-    f1 = metrics.f1_score(
-        [[vocab.get_label(i) for i in true_labels]],
-        [[vocab.get_label(i) for i in predicted_labels]],
-        average=f1_average)
-    if verbose:
-        print(f'Accuracy: {accuracy:.2%} | Loss: {loss:.4f} | F1: {f1:.2%}')
-    return accuracy, loss, f1
+    if params.verbose:
+        print(f'Accuracy: {acc:.2%} | Loss: {loss:.4f} | F1: {f1:.2%}')
+    return acc, loss, f1
 

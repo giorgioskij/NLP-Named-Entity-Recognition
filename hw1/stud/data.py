@@ -72,6 +72,7 @@ class Vocabulary():
 
         self.unk: int = self.stoi[self.unk_symbol]
         self.pad: int = self.stoi[self.pad_symbol]
+        self.pad_label_id: int = self.stol[self.pad_label]
         self.n_labels: int = len(self.ltos)
 
     def __contains__(self, word: str):
