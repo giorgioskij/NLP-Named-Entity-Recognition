@@ -11,7 +11,7 @@ import pathlib
 from datetime import datetime
 from seqeval import metrics
 from dataclasses import dataclass
-import dataset
+from . import dataset
 
 
 @dataclass
@@ -38,7 +38,7 @@ class NerModel(nn.Module):
                  hidden_size: int,
                  bidirectional: bool = False,
                  pretrained_emb: Optional[torch.Tensor] = None,
-                 is_pretrained: bool = False):
+                 freeze_weights: bool = False):
         super().__init__()
 
         if pretrained_emb is not None:
@@ -53,7 +53,7 @@ class NerModel(nn.Module):
                 embedding_dim=embedding_dim,
                 padding_idx=padding_idx,
             )
-            if is_pretrained:
+            if freeze_weights:
                 self.embedding.requires_grad_(False)
 
         self.lstm = nn.LSTM(input_size=embedding_dim,
@@ -127,7 +127,7 @@ def train(model: nn.Module, trainloader: torch.utils.data.DataLoader,
             if params.verbose:
                 if params.log_steps is not None: print('-' * 59)
                 print(
-                    f'| End of epoch {epoch+1:3d} '
+                    f'End of epoch {epoch+1:3d} '
                     f'| Time: {time.time() - epoch_start_time:5.2f}s '
                     f'| Eval acc {accuracy:.2%}',
                     f'| Eval f1 {f1:6.2%}',

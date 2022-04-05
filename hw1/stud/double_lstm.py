@@ -1,7 +1,7 @@
 """This whole idea is kinda thrash, remove this file at some point
 """
 
-import data
+import dataset
 import lstm
 import torch
 import pathlib

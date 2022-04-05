@@ -74,7 +74,7 @@ pre_model = lstm.NerModel(n_classes=13,
                           hidden_size=100,
                           bidirectional=True,
                           pretrained_emb=None,
-                          is_pretrained=True)
+                          freeze_weights=False)
 pre_model.load_state_dict(torch.load('../../model/pre_bi.pth'))
 
 # loss, opt, params
@@ -85,7 +85,7 @@ optimizer = torch.optim.SGD(params=pre_model.parameters(),
 params = lstm.TrainParams(optimizer=optimizer,
                           vocab=vocab,
                           loss_fn=loss_fn,
-                          epochs=100,
+                          epochs=400,
                           log_steps=None,
                           verbose=True,
                           device=device,
@@ -94,3 +94,6 @@ params = lstm.TrainParams(optimizer=optimizer,
 
 # train
 lstm.train(pre_model, trainloader, devloader, params)
+
+
+# 63.22 with lr=0.001 m=0.9 bs=128, pretrained, bidirectional

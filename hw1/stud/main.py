@@ -66,5 +66,5 @@ else:
 # 43.72 with lr=0.001, no weight decay, mom=0.9,
 # standard crossentropy, 200 epochs
 
-# 59.88 with lr=0.001, no weight decay, m=0.9, 400 ep,
-# standard crossentropy, bidirectional
+# 60.33 with lr=0.001, no weight decay, m=0.9, 400 ep,
+# standard crossentropy, bidirectional, batch 32
