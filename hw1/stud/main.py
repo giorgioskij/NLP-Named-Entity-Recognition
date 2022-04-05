@@ -2,27 +2,26 @@
 """
 
 import torch
-import data
+import dataset
 import lstm
-import pathlib
+from pathlib import Path
 from torch import nn
 
 device = 'cuda:0' if torch.cuda.is_available() else 'cpu'
 
 torch.manual_seed(42)
-trainset = data.NerDataset(threshold=2, window_size=100)
-vocab: data.Vocabulary = trainset.vocab
-devset= data.NerDataset(path='../../data/dev.tsv', vocab=vocab)
+trainset = dataset.NerDataset(threshold=2, window_size=100)
+vocab: dataset.Vocabulary = trainset.vocab
+devset = dataset.NerDataset(path=Path('../../data/dev.tsv'), vocab=vocab)
 pad_label_id = vocab.pad_label_id
 o_weight = 0.005
-loss_weights = torch.tensor([(1 - o_weight)/12] * 12 + [o_weight]).to(device)
+loss_weights = torch.tensor([(1 - o_weight) / 12] * 12 + [o_weight]).to(device)
 
 # dataloaders
-trainloader, devloader = data.get_dataloaders(
-    trainset,
-    devset,
-    batch_size_train=32,
-    batch_size_dev=1024)
+trainloader, devloader = dataset.get_dataloaders(trainset,
+                                              devset,
+                                              batch_size_train=128,
+                                              batch_size_dev=1024)
 
 # model
 model = lstm.NerModel(n_classes=13,
@@ -40,11 +39,9 @@ optimizer = torch.optim.SGD(model.parameters(),
 
 # loss
 weighted_loss = False
-loss_fn = nn.CrossEntropyLoss(
-    weight=loss_weights if weighted_loss else None,
-    ignore_index=pad_label_id,
-    reduction='sum'
-)
+loss_fn = nn.CrossEntropyLoss(weight=loss_weights if weighted_loss else None,
+                              ignore_index=pad_label_id,
+                              reduction='sum')
 
 # params
 params = lstm.TrainParams(optimizer=optimizer,
@@ -55,16 +52,14 @@ params = lstm.TrainParams(optimizer=optimizer,
                           verbose=True,
                           device=device,
                           f1_average='macro',
-                          save_path=pathlib.Path('../../model/'))
+                          save_path=Path('../../model/'))
 
 # train
-train = False
+train = True
 if train:
     lstm.train(model, trainloader, devloader, params)
 else:
     model.load_state_dict(torch.load('../../model/6033bi.pth'))
-
-
 
 # 44.07 with lr=0.01, no weight decay, standard crossentropy, 400 epochs
 
@@ -72,6 +67,4 @@ else:
 # standard crossentropy, 200 epochs
 
 # 59.88 with lr=0.001, no weight decay, m=0.9, 400 ep,
-# standard crossentropy, bidirectional 
-
-
+# standard crossentropy, bidirectional
