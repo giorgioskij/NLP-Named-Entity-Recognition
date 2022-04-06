@@ -1,35 +1,37 @@
-#%%
+from pathlib import Path
+
 import gensim.downloader
 from gensim.models.keyedvectors import KeyedVectors
-import dataset
-import lstm
 import numpy as np
 import torch
 from torch import nn
-from pathlib import Path
+
+import dataset
+import lstm
 
 
 def build_pretrained_embeddings():
     embeddings: KeyedVectors = gensim.downloader.load(
         'glove-wiki-gigaword-100')  # type: ignore
-
+    
     d = dataset.NerDataset(threshold=2)
     v = d.vocab
-
+    
     v_words: set[str] = {v[i] for i in range(len(v))}  # type: ignore
     g_words: set[str] = set(embeddings.key_to_index)
-
+    
     lenv = len(v_words)
     leng = len(g_words)
     common = len(v_words & g_words)
-
+    
     print(f'Vocab has {lenv} words, pretrained has {leng}\n'
           f'common words: {common}\n'
           f'words unique in vocab: {lenv - common}\n'
           f'words unique in pretrained: {leng - common}\n'
           f'pretrained is all lowercase? '
           f'{not any(w.lower() != w for w in g_words)}')
-
+    
+    # use only pretrained
     print('Add unk and pad to pretrained embeddings')
     vectors: np.ndarray = embeddings.vectors  # type: ignore
     pad_vector = np.random.rand(1, vectors.shape[1])
@@ -37,7 +39,7 @@ def build_pretrained_embeddings():
     vectors = np.concatenate((pad_vector, unk_vector, vectors))
     vectors = torch.FloatTensor(vectors)  # type: ignore
     print(f'{vectors.shape=}')
-
+    
     print('Building model with pretrained embeddings')
     model = lstm.NerModel(n_classes=13,
                           embedding_dim=vectors.shape[1],
@@ -46,13 +48,14 @@ def build_pretrained_embeddings():
                           hidden_size=100,
                           bidirectional=True,
                           pretrained_emb=vectors)  # type: ignore
-
+    
     print('Saving the model')
     torch.save(model.state_dict(), '../../model/pre_bi.pth')
     return model
 
 
-#%%
+model = build_pretrained_embeddings()
+
 device = 'cuda:0' if torch.cuda.is_available() else 'cpu'
 torch.manual_seed(42)
 trainset = dataset.NerDataset(threshold=2, window_size=100)
@@ -93,7 +96,11 @@ params = lstm.TrainParams(optimizer=optimizer,
                           save_path=Path('../../model/'))
 
 # train
-lstm.train(pre_model, trainloader, devloader, params)
-
+train = False
+if train:
+    lstm.train(pre_model, trainloader, devloader, params)
+else:
+    pre_model.load_state_dict(torch.load('../../model/6322_pre_bi.pth'))
+    lstm.test(pre_model, devloader, params)
 
 # 63.22 with lr=0.001 m=0.9 bs=128, pretrained, bidirectional

@@ -1,11 +1,13 @@
 """Main file for interactive training and testing
 """
 
+from pathlib import Path
+
 import torch
+from torch import nn
+
 import dataset
 import lstm
-from pathlib import Path
-from torch import nn
 
 device = 'cuda:0' if torch.cuda.is_available() else 'cpu'
 
@@ -19,15 +21,15 @@ loss_weights = torch.tensor([(1 - o_weight) / 12] * 12 + [o_weight]).to(device)
 
 # dataloaders
 trainloader, devloader = dataset.get_dataloaders(trainset,
-                                              devset,
-                                              batch_size_train=128,
-                                              batch_size_dev=1024)
+                                                 devset,
+                                                 batch_size_train=128,
+                                                 batch_size_dev=1024)
 
 # model
 model = lstm.NerModel(n_classes=13,
                       embedding_dim=100,
                       vocab_size=len(vocab),
-                      padding_idx=(vocab.pad),
+                      padding_idx=vocab.pad,
                       hidden_size=100,
                       bidirectional=True)
 
@@ -37,6 +39,9 @@ optimizer = torch.optim.SGD(model.parameters(),
                             weight_decay=0,
                             momentum=0.9)
 
+# scheduler
+scheduler = torch.optim.lr_scheduler.ExponentialLR(optimizer, 0.9)
+
 # loss
 weighted_loss = False
 loss_fn = nn.CrossEntropyLoss(weight=loss_weights if weighted_loss else None,
@@ -45,6 +50,7 @@ loss_fn = nn.CrossEntropyLoss(weight=loss_weights if weighted_loss else None,
 
 # params
 params = lstm.TrainParams(optimizer=optimizer,
+                          scheduler=None,
                           vocab=vocab,
                           loss_fn=loss_fn,
                           epochs=400,
@@ -55,7 +61,7 @@ params = lstm.TrainParams(optimizer=optimizer,
                           save_path=Path('../../model/'))
 
 # train
-train = True
+train: bool = True
 if train:
     lstm.train(model, trainloader, devloader, params)
 else:

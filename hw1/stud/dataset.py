@@ -2,19 +2,21 @@
 Contains classes and functions for the management of the data
 """
 
-import torch
-import torch.utils.data
-from tqdm import tqdm
-from typing import List, Tuple, Dict, Optional, Union
+from typing import Dict, List, Optional, Tuple, Union
 from collections import Counter
 from pathlib import Path
 import pickle
+
+import torch
+import torch.utils.data
+from tqdm import tqdm
 
 
 class Vocabulary():
     """ Implements a vocabulary of both words and labels.
         Automatically adds '<unk>' and '<pad>' word types.
     """
+    
     def __init__(self,
                  sentences: Optional[List[Tuple[List[str], List[str]]]] = None,
                  threshold: int = 1,
@@ -31,13 +33,13 @@ class Vocabulary():
                 Number of appearances needed for a word to
                 be inserted in the dictionary. Defaults to 1.
         """
-
+        
         if path is None and sentences is None:
             raise ValueError('To build a vocabulary you must give either a '
                              'list of sentences or a path to a dump.')
-
+        
         self.threshold: int = threshold
-
+        
         # load from dump
         if path is not None:
             self.counts, self.lcounts = self.load_counts(path)
@@ -49,16 +51,16 @@ class Vocabulary():
                 for word, label in zip(sentence, labels):
                     self.counts[word] += 1
                     self.lcounts[label] += 1
-
+                    
                     if label == 'id':
                         print(f'{sentence=}')
                         print(f'{labels=}')
-
+        
         # unk and pad symbols
         self.unk_symbol = '<unk>'
         self.pad_symbol = '<pad>'
         self.pad_label = 'PAD'
-
+        
         # word vocabularies
         self.itos: List[str] = sorted(
             list(
@@ -66,22 +68,22 @@ class Vocabulary():
                        self.counts.keys())) +
             [self.unk_symbol, self.pad_symbol])
         self.stoi: Dict[str, int] = {s: i for i, s in enumerate(self.itos)}
-
+        
         # label vocabularies
         self.ltos: List[str] = sorted(list(self.lcounts.keys()) + ['PAD'])
         self.stol: Dict[str, int] = {s: i for i, s in enumerate(self.ltos)}
-
+        
         self.unk: int = self.stoi[self.unk_symbol]
         self.pad: int = self.stoi[self.pad_symbol]
         self.pad_label_id: int = self.stol[self.pad_label]
         self.n_labels: int = len(self.ltos)
-
+    
     def __contains__(self, word: str):
         return word in self.stoi
-
+    
     def __len__(self):
         return len(self.itos)
-
+    
     def load_counts(self, path: str):
         """Loads self.counts and self.lcounts from a previous dump
 
@@ -94,7 +96,7 @@ class Vocabulary():
         with open(path, 'rb') as f:
             counts, lcounts = pickle.load(f)
         return counts, lcounts
-
+    
     def dump_counts(self, path: str):
         """Dumps self.counts and self.lcounts as pickle objects
 
@@ -103,7 +105,7 @@ class Vocabulary():
         """
         with open(path, 'wb') as f:
             pickle.dump((self.counts, self.lcounts), f)
-
+    
     def get_word(self, idx: int) -> str:
         """Return the word at a given index
 
@@ -114,7 +116,7 @@ class Vocabulary():
             str: the word corresponding to the given index
         """
         return self.itos[idx]
-
+    
     def get_word_id(self, word: str) -> int:
         """Get the index of a given word
 
@@ -125,7 +127,7 @@ class Vocabulary():
             int: Index of the word if present, otherwise the index of '<unk>'
         """
         return self.stoi[word] if word in self.stoi else self.unk
-
+    
     def get_label(self, idx: int) -> str:
         """Get a label name from its index
 
@@ -136,7 +138,7 @@ class Vocabulary():
             str: the correpsonding label name
         """
         return self.ltos[idx]
-
+    
     def get_label_id(self, label: str) -> int:
         """Get the id of a label
 
@@ -147,7 +149,7 @@ class Vocabulary():
             int: the corresponding index
         """
         return self.stol[label]
-
+    
     def __getitem__(self, idx: Union[int, str]) -> Union[str, int]:
         if isinstance(idx, str):
             return self.get_word_id(idx)
@@ -159,12 +161,15 @@ class Vocabulary():
 class NerDataset(torch.utils.data.Dataset):
     """Represent a Named Entity Recognition Dataset
     """
+    
     def __init__(self,
                  path: Path = Path('../../data/train.tsv'),
                  vocab: Optional[Vocabulary] = None,
                  threshold: int = 2,
                  window_size: int = 100,
-                 window_shift: Optional[int] = None):
+                 window_shift: Optional[int] = None,
+                 is_conll: bool = False,
+                 lower: bool = False):
         """
         Build a Named Entity Recognition dataset from a .tsv file,
         which loads data as fixed-size windows
@@ -188,8 +193,12 @@ class NerDataset(torch.utils.data.Dataset):
             raise ValueError('Careful, you are trying to build a vocabulary'
                              'on something that is not the training data')
         self.path: Path = path
-        self.sentences: List[Tuple[List[str],
-                                   List[str]]] = self.load_data(self.path)
+        self.is_conll: bool = is_conll
+        self.lower: bool = lower
+        self.sentences: List[Tuple[List[str], List[str]]] = (
+            self.load_conll(self.path, self.lower) if self.is_conll
+            else self.load_data(self.path))
+        
         self.vocab: Vocabulary = (Vocabulary(
             self.sentences, threshold=threshold) if vocab is None else vocab)
         self.indexed_data: List[Tuple[List[int],
@@ -202,8 +211,31 @@ class NerDataset(torch.utils.data.Dataset):
                              'size, both must be positive')
         self.windows: List[Tuple[torch.Tensor,
                                  torch.Tensor]] = self.build_windows()
-
-    def load_data(self, path: Path):
+    
+    def load_conll(self, path: Path, lower: bool) -> List[
+        Tuple[List[str], List[str]]]:
+        words = []
+        labels = []
+        sentences = []
+        
+        with open(path, 'rt', encoding='utf-8') as f:
+            lines = list(map(str.strip, f.readlines()))[2:]
+            for line_str in tqdm(lines, desc='Reading data', total=len(lines)):
+                
+                if not line_str and len(words):
+                    sentences.append((words, labels))
+                    words = []
+                    labels = []
+                else:
+                    line: List[str] = line_str.split()
+                    words.append(line[0].lower() if lower else line[0])
+                    labels.append(line[3])
+            if len(words):
+                sentences.append((words, labels))
+        
+        return sentences
+    
+    def load_data(self, path: Path) -> List[Tuple[List[str], List[str]]]:
         """Loads the dataset from file
 
         Args:
@@ -230,11 +262,11 @@ class NerDataset(torch.utils.data.Dataset):
                 else:
                     words.append(line[0])
                     labels.append(line[1])
-
+            
             # last sentence
             sentences.append((words, labels))
         return sentences
-
+    
     def index_data(self) -> List[Tuple[List[int], List[int]]]:
         """
         Builds self.indexed_data transforming both
@@ -251,7 +283,7 @@ class NerDataset(torch.utils.data.Dataset):
                  [self.vocab.get_label_id(l) for l in sentence[1]]),
                 self.sentences))
         return data
-
+    
     def build_windows(self) -> List[Tuple[torch.Tensor, torch.Tensor]]:
         """Builds fixed-size windows from the indexed data
 
@@ -269,23 +301,23 @@ class NerDataset(torch.utils.data.Dataset):
                 word_window += ([self.vocab.pad] *
                                 (self.window_size - len(word_window)))
                 label_window += (
-                    [self.vocab.get_label_id(self.vocab.pad_label)] *
-                    (self.window_size - len(label_window)))
+                        [self.vocab.get_label_id(self.vocab.pad_label)] *
+                        (self.window_size - len(label_window)))
                 # append
                 windows.append(
                     (torch.tensor(word_window), torch.tensor(label_window)))
                 start += self.window_shift
         return windows
-
+    
     # def get_window(self, idx):
     #     return self.windows[idx]
-
+    
     # def get_window_count(self):
     #     return len(self.windows)
-
+    
     def __len__(self):
         return len(self.windows)
-
+    
     def __getitem__(self, idx):
         return self.windows[idx]
 
@@ -293,7 +325,9 @@ class NerDataset(torch.utils.data.Dataset):
 def get_dataloaders(trainset: NerDataset,
                     devset: NerDataset,
                     batch_size_train: int = 128,
-                    batch_size_dev: int = 256):
+                    batch_size_dev: int = 256
+                    ) -> Tuple[
+    torch.utils.data.DataLoader, torch.utils.data.DataLoader]:
     """Return the dataloaders from the given datasets
 
     Args:
