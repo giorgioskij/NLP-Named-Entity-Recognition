@@ -20,7 +20,8 @@ class Vocabulary():
     def __init__(self,
                  sentences: Optional[List[Tuple[List[str], List[str]]]] = None,
                  threshold: int = 1,
-                 path: Optional[str] = None):
+                 path: Optional[Path] = None,
+                 premade: List[str] = None):
         """Initialize the vocabulary from a dataset
 
         Args:
@@ -34,44 +35,61 @@ class Vocabulary():
                 be inserted in the dictionary. Defaults to 1.
         """
         
-        if path is None and sentences is None:
+        if path is None and sentences is None and premade is None:
             raise ValueError('To build a vocabulary you must give either a '
                              'list of sentences or a path to a dump.')
         
         self.threshold: int = threshold
         
+        # unk and pad symbols
+        self.unk_symbol: str = '<unk>'
+        self.pad_symbol: str = '<pad>'
+        self.pad_label: str = 'PAD'
+        
+        # data containers
+        self.counts: Counter
+        self.lcounts: Counter
+        self.itos: List[str]
+        self.stoi: Dict[str, int]
+        self.ltos: List[str]
+        self.stol: Dict[str, int]
+        
+        # build from pretrained embedding matrix
+        if premade is not None:
+            self.threshold = 1
+            self.itos = list(premade.copy())
+            self.itos.insert(0, self.pad_symbol)
+            self.itos.insert(1, self.unk_symbol)
+            self.ltos = ['B-CORP', 'B-CW', 'B-GRP', 'B-LOC', 'B-PER', 'B-PROD',
+                         'I-CORP', 'I-CW', 'I-GRP', 'I-LOC', 'I-PER', 'I-PROD',
+                         'O', 'PAD']
+            
         # load from dump
-        if path is not None:
-            self.counts, self.lcounts = self.load_counts(path)
+        elif path is not None:
+            self.itos, self.ltos = self.load_data(path)
+            # self.counts, self.lcounts = self.load_counts(path)
+
         # build from sentences
         elif sentences is not None:
-            self.counts: Counter = Counter()
-            self.lcounts: Counter = Counter()
+            self.counts = Counter()
+            self.lcounts = Counter()
             for sentence, labels in sentences:
                 for word, label in zip(sentence, labels):
                     self.counts[word] += 1
                     self.lcounts[label] += 1
-                    
                     if label == 'id':
                         print(f'{sentence=}')
                         print(f'{labels=}')
+            self.itos = sorted(
+                list(
+                    filter(lambda x: self.counts[x] >= threshold,
+                           self.counts.keys())) +
+                [self.unk_symbol, self.pad_symbol])
+            # label vocabularies
+            self.ltos = sorted(list(self.lcounts.keys()) + ['PAD'])
         
-        # unk and pad symbols
-        self.unk_symbol = '<unk>'
-        self.pad_symbol = '<pad>'
-        self.pad_label = 'PAD'
-        
-        # word vocabularies
-        self.itos: List[str] = sorted(
-            list(
-                filter(lambda x: self.counts[x] >= threshold,
-                       self.counts.keys())) +
-            [self.unk_symbol, self.pad_symbol])
-        self.stoi: Dict[str, int] = {s: i for i, s in enumerate(self.itos)}
-        
-        # label vocabularies
-        self.ltos: List[str] = sorted(list(self.lcounts.keys()) + ['PAD'])
-        self.stol: Dict[str, int] = {s: i for i, s in enumerate(self.ltos)}
+        self.stoi = {s: i for i, s in enumerate(self.itos)}
+        self.stol = {s: i for i, s in enumerate(self.ltos)}
         
         self.unk: int = self.stoi[self.unk_symbol]
         self.pad: int = self.stoi[self.pad_symbol]
@@ -84,7 +102,7 @@ class Vocabulary():
     def __len__(self):
         return len(self.itos)
     
-    def load_counts(self, path: str):
+    def load_counts(self, path: Path):
         """Loads self.counts and self.lcounts from a previous dump
 
         Args:
@@ -97,7 +115,7 @@ class Vocabulary():
             counts, lcounts = pickle.load(f)
         return counts, lcounts
     
-    def dump_counts(self, path: str):
+    def dump_counts(self, path: Path):
         """Dumps self.counts and self.lcounts as pickle objects
 
         Args:
@@ -105,6 +123,15 @@ class Vocabulary():
         """
         with open(path, 'wb') as f:
             pickle.dump((self.counts, self.lcounts), f)
+            
+    def dump_data(self, path: Path):
+        with open(path, 'wb') as f:
+            pickle.dump((self.itos, self.ltos), f )
+            
+    def load_data(self, path: Path) -> Tuple[List[str], Dict[str, int]]:
+        with open(path, 'rb') as f:
+            itos, ltos = pickle.load(f)
+        return itos, ltos
     
     def get_word(self, idx: int) -> str:
         """Return the word at a given index
@@ -163,7 +190,7 @@ class NerDataset(torch.utils.data.Dataset):
     """
     
     def __init__(self,
-                 path: Path = Path('../../data/train.tsv'),
+                 path: Path = Path('data/train.tsv'),
                  vocab: Optional[Vocabulary] = None,
                  threshold: int = 2,
                  window_size: int = 100,
@@ -177,7 +204,7 @@ class NerDataset(torch.utils.data.Dataset):
         Args:
             path (Path, optional):
                 Path of the .tsv dataset file.
-                Defaults to Path('../../data/train.tsv').
+                Defaults to Path('data/train.tsv').
             vocab (Vocabulary, optional):
                 Vocabulary to index the data. If none, build one.
                 Defaults to None.

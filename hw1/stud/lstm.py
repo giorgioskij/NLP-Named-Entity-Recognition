@@ -13,7 +13,7 @@ import torch.utils.data
 from torch import nn
 from seqeval import metrics
 
-from hw1.stud import dataset
+from . import dataset
 
 
 @dataclass
@@ -48,7 +48,7 @@ class NerModel(nn.Module):
         if pretrained_emb is not None:
             self.embedding = nn.Embedding.from_pretrained(
                 embeddings=pretrained_emb,
-                freeze=True,
+                freeze=freeze_weights,
                 padding_idx=padding_idx,
             )
         else:

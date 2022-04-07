@@ -8,9 +8,8 @@ REMEMBER TO TURN THE MAX_TRIES BACK TO 10 IN EVALUATE.PY
 
 stanza to compute POS - various data preprocessing
 
-
 - Trying on connll2003
 
-- Change to Adaptive LR
+- Change to Adaptive LR - done: doesn't change much, actually kinda worse
 
 - CRF

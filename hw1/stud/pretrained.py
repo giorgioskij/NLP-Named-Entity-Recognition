@@ -10,7 +10,8 @@ import dataset
 import lstm
 
 
-def build_pretrained_embeddings():
+def compare_vocabularies():
+    print('Loading pretrained glove embeddings')
     embeddings: KeyedVectors = gensim.downloader.load(
         'glove-wiki-gigaword-100')  # type: ignore
     
@@ -30,6 +31,12 @@ def build_pretrained_embeddings():
           f'words unique in pretrained: {leng - common}\n'
           f'pretrained is all lowercase? '
           f'{not any(w.lower() != w for w in g_words)}')
+
+
+def build_pretrained_embeddings(save_stuff: bool = False, freeze: bool = False):
+    print('Loading pretrained glove embeddings')
+    embeddings: KeyedVectors = gensim.downloader.load(
+        'glove-wiki-gigaword-100')  # type: ignore
     
     # use only pretrained
     print('Add unk and pad to pretrained embeddings')
@@ -47,60 +54,68 @@ def build_pretrained_embeddings():
                           padding_idx=0,
                           hidden_size=100,
                           bidirectional=True,
-                          pretrained_emb=vectors)  # type: ignore
+                          pretrained_emb=vectors,  # type: ignore
+                          freeze_weights=freeze)
     
-    print('Saving the model')
-    torch.save(model.state_dict(), '../../model/pre_bi.pth')
-    return model
+    print('Building vocabulary of pretrained embeddings')
+    vocab = dataset.Vocabulary(premade=embeddings.index_to_key)
+    
+    if save_stuff:
+        print('Saving the model')
+        torch.save(model.state_dict(), 'model/pre_bi.pth')
+        print('Saving the vocab')
+        vocab.dump_data(Path('model/glove_vocab.pkl'))
+    return model, vocab
 
 
-model = build_pretrained_embeddings()
-
-device = 'cuda:0' if torch.cuda.is_available() else 'cpu'
-torch.manual_seed(42)
-trainset = dataset.NerDataset(threshold=2, window_size=100)
-vocab: dataset.Vocabulary = trainset.vocab
-pad_label_id = vocab.pad_label_id
-devset = dataset.NerDataset(path=Path('../../data/dev.tsv'), vocab=vocab)
-
-# dataloaders
-trainloader, devloader = dataset.get_dataloaders(trainset,
-                                                 devset,
-                                                 batch_size_train=128,
-                                                 batch_size_dev=1024)
-
-# model
-pre_model = lstm.NerModel(n_classes=13,
-                          embedding_dim=100,
-                          vocab_size=400_002,
-                          padding_idx=0,
-                          hidden_size=100,
-                          bidirectional=True,
-                          pretrained_emb=None,
-                          freeze_weights=False)
-pre_model.load_state_dict(torch.load('../../model/pre_bi.pth'))
-
-# loss, opt, params
-loss_fn = nn.CrossEntropyLoss(ignore_index=pad_label_id, reduction='sum')
-optimizer = torch.optim.SGD(params=pre_model.parameters(),
-                            lr=0.001,
-                            momentum=0.9)
-params = lstm.TrainParams(optimizer=optimizer,
-                          vocab=vocab,
-                          loss_fn=loss_fn,
-                          epochs=400,
-                          log_steps=None,
-                          verbose=True,
-                          device=device,
-                          f1_average='macro',
-                          save_path=Path('../../model/'))
-
-# train
-train = False
-if train:
-    lstm.train(pre_model, trainloader, devloader, params)
-else:
-    pre_model.load_state_dict(torch.load('../../model/6322_pre_bi.pth'))
-    lstm.test(pre_model, devloader, params)
-
-# 63.22 with lr=0.001 m=0.9 bs=128, pretrained, bidirectional
+def fine_tune(vocab: dataset.Vocabulary, model: lstm.NerModel = None):
+    device = 'cuda:0' if torch.cuda.is_available() else 'cpu'
+    torch.manual_seed(42)
+    
+    trainset = dataset.NerDataset(path=Path('data/train.tsv'), vocab=vocab)
+    devset = dataset.NerDataset(path=Path('data/dev.tsv'), vocab=vocab)
+    
+    # dataloaders
+    trainloader, devloader = dataset.get_dataloaders(trainset,
+                                                     devset,
+                                                     batch_size_train=128,
+                                                     batch_size_dev=1024)
+    
+    if model is None:
+        # model
+        model = lstm.NerModel(n_classes=13,
+                              embedding_dim=100,
+                              vocab_size=400_002,
+                              padding_idx=0,
+                              hidden_size=100,
+                              bidirectional=True,
+                              pretrained_emb=None,
+                              freeze_weights=True)
+        model.load_state_dict(torch.load('model/pre_bi.pth'))
+    
+    # loss, opt, params
+    loss_fn = nn.CrossEntropyLoss(ignore_index=vocab.pad_label_id,
+                                  reduction='sum')
+    
+    optimizer = torch.optim.SGD(params=model.parameters(),
+                                lr=0.001,
+                                momentum=0.9)
+    
+    params = lstm.TrainParams(optimizer=optimizer,
+                              scheduler=None,
+                              vocab=vocab,
+                              loss_fn=loss_fn,
+                              epochs=400,
+                              log_steps=None,
+                              verbose=True,
+                              device=device,
+                              f1_average='macro',
+                              save_path=Path('model/'))
+    
+    lstm.train(model, trainloader, devloader, params)
+    
+    # as expected, fine-tuning the model while keeping the same embeddings
+    # barely works, as the dictionary and the embeddings are completelly
+    # misaligned. We have to build a new dictionary from the actual embeddings
+    
+    # 63.22 with lr=0.001 m=0.9 bs=128, pretrained, bidirectional
