@@ -13,3 +13,29 @@ stanza to compute POS - various data preprocessing
 - Change to Adaptive LR - done: doesn't change much, actually kinda worse
 
 - CRF
+
+
+INCLUDE POS IN FEATURES:
+doing it during the forward of the network is waaaaay to slow
+we have to do it in a preprocessing step
+
+NerDatasetWithPos
+sentence = [ [...words]  [...labels]  [...postags] ]
+
+dataloader returns (with window size of 100)
+
+[batch 
+
+    [100 word ids
+
+    ],
+
+    [100 labels
+
+    ],
+
+    [100 postags
+
+    ]
+
+]
