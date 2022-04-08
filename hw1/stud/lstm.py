@@ -15,6 +15,8 @@ from seqeval import metrics
 
 from . import dataset
 
+import stanza
+
 
 @dataclass
 class TrainParams:
@@ -42,9 +44,17 @@ class NerModel(nn.Module):
                  hidden_size: int,
                  bidirectional: bool = False,
                  pretrained_emb: Optional[torch.Tensor] = None,
-                 freeze_weights: bool = False):
+                 freeze_weights: bool = False,
+                 double_linear: bool = False,
+                 use_pos: bool = False,
+                 vocab: dataset.Vocabulary = None):
         super().__init__()
         
+        self.double_linear: bool = double_linear
+        self.use_pos: bool = use_pos
+        if use_pos:
+            self.pos_extractor = stanza.Pipeline('en')
+
         if pretrained_emb is not None:
             self.embedding = nn.Embedding.from_pretrained(
                 embeddings=pretrained_emb,
@@ -65,9 +75,17 @@ class NerModel(nn.Module):
                             batch_first=True,
                             bidirectional=bidirectional)
         
-        self.linear = nn.Linear(in_features=hidden_size *
-                                            2 if bidirectional else hidden_size,
-                                out_features=n_classes)
+        if self.double_linear:
+            self.linear1 = nn.Linear(
+                in_features=hidden_size * 2 if bidirectional else hidden_size,
+                out_features=hidden_size)
+            self.linear2 = nn.Linear(in_features=hidden_size,
+                                     out_features=n_classes)
+        
+        else:
+            self.linear = nn.Linear(
+                in_features=hidden_size * 2 if bidirectional else hidden_size,
+                out_features=n_classes)
         
         self.dropout = nn.Dropout()
     
@@ -76,13 +94,21 @@ class NerModel(nn.Module):
         embeddings = self.dropout(embeddings)
         # print(f'emb: {embeddings.shape}')
         
+        if self.use_pos:
+            for sentence in x:
+                human_sentence: str = self.vocab.decode(sentence)
+                pos_tags = self.pos_extractor(human_sentence)
+        
         lstm_out, _ = self.lstm(embeddings)
         lstm_out = self.dropout(lstm_out)
         # print(f'lstm: {lstm_out.shape}')
         
-        clf_out = self.linear(lstm_out)
-        
-        # clf_out = clf_out.view(128 * 7, -1)
+        if self.double_linear:
+            clf_out = self.linear1(lstm_out)
+            clf_out = self.dropout(torch.relu(clf_out))
+            clf_out = self.linear2(clf_out)
+        else:
+            clf_out = self.linear(lstm_out)
         
         return clf_out
 

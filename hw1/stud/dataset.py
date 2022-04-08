@@ -12,7 +12,27 @@ import torch.utils.data
 from tqdm import tqdm
 
 
-class Vocabulary():
+class PosVocabulary:
+    """
+        Implements a vocabulary for the POS tags
+    """
+    
+    def __init__(self):
+        self.ptos: List[str] = ['PROPN', 'PUNCT']
+        self.stop: Dict[str, int] = {s: i for i, s in enumerate(self.ptos)}
+    
+    def __len__(self):
+        return len(self.ptos)
+    
+    def __getitem__(self, idx: Union[int, str]) -> Union[str, int]:
+        if isinstance(idx, str):
+            return self.stop[idx]
+        elif isinstance(idx, int):
+            return self.ptos[idx]
+        raise NotImplementedError()
+
+
+class Vocabulary:
     """ Implements a vocabulary of both words and labels.
         Automatically adds '<unk>' and '<pad>' word types.
     """
@@ -58,17 +78,19 @@ class Vocabulary():
         if premade is not None:
             self.threshold = 1
             self.itos = list(premade.copy())
-            self.itos.insert(0, self.pad_symbol)
-            self.itos.insert(1, self.unk_symbol)
+            if self.pad_symbol not in self.itos:
+                self.itos.insert(0, self.pad_symbol)
+            if self.unk_symbol not in self.itos:
+                self.itos.insert(1, self.unk_symbol)
             self.ltos = ['B-CORP', 'B-CW', 'B-GRP', 'B-LOC', 'B-PER', 'B-PROD',
                          'I-CORP', 'I-CW', 'I-GRP', 'I-LOC', 'I-PER', 'I-PROD',
                          'O', 'PAD']
-            
+        
         # load from dump
         elif path is not None:
             self.itos, self.ltos = self.load_data(path)
             # self.counts, self.lcounts = self.load_counts(path)
-
+        
         # build from sentences
         elif sentences is not None:
             self.counts = Counter()
@@ -123,11 +145,11 @@ class Vocabulary():
         """
         with open(path, 'wb') as f:
             pickle.dump((self.counts, self.lcounts), f)
-            
+    
     def dump_data(self, path: Path):
         with open(path, 'wb') as f:
-            pickle.dump((self.itos, self.ltos), f )
-            
+            pickle.dump((self.itos, self.ltos), f)
+    
     def load_data(self, path: Path) -> Tuple[List[str], Dict[str, int]]:
         with open(path, 'rb') as f:
             itos, ltos = pickle.load(f)
@@ -183,6 +205,13 @@ class Vocabulary():
         elif isinstance(idx, int):
             return self.get_word(idx)
         raise NotImplementedError()
+    
+    def decode(self, sentence: List[int]):
+        return ' '.join([self.get_word(i) for i in sentence])
+    
+    def encode(self, sentence: str, lower: bool = True):
+        return [self.get_word_id(i.lower() if lower else i)
+                for i in sentence.strip().split()]
 
 
 class NerDataset(torch.utils.data.Dataset):

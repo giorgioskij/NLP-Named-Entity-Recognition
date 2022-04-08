@@ -1,5 +1,5 @@
 from pathlib import Path
-from typing import List, Optional
+from typing import Dict, List, Optional
 
 import torch
 from torch import nn
@@ -15,6 +15,7 @@ class NerdTagger:
         self.lower: bool
         self.vocab: dataset.Vocabulary
         
+        self.style: str = style
         self.device: str = 'cuda:0' if torch.cuda.is_available() else 'cpu'
         if device is not None:
             self.device = device
@@ -33,27 +34,53 @@ class NerdTagger:
             self.model.load_state_dict(
                 torch.load('model/6033bi.pth',
                            map_location=torch.device(self.device)))
-        
+            
         elif style == 'glove':
             print('Generating Bi-LSTM with glove embeddings')
             self.lower = True
+            self.vocab = dataset.Vocabulary(path=Path('model/glove_vocab.pkl'))
             self.model = lstm.NerModel(n_classes=13,
                                        embedding_dim=100,
-                                       vocab_size=400_002,
-                                       padding_idx=0,
+                                       vocab_size=len(self.vocab),
+                                       padding_idx=self.vocab.pad,
                                        hidden_size=100,
                                        bidirectional=True,
                                        pretrained_emb=None,
-                                       freeze_weights=False).to(self.device)
+                                       freeze_weights=False,
+                                       double_linear=False).to(self.device)
             self.model.load_state_dict(torch.load(
                 'model/6965-bi-nofreeze-glove.pth',
                 map_location=torch.device(self.device)))
-            self.vocab = dataset.Vocabulary(path=Path('model/glove_vocab.pkl'))
+        
+        elif style == 'stanza':
+            # compare with performance of stanza
+            import stanza
+            stanza.download('en')
+            self.nlp = stanza.Pipeline(lang='en', processors='tokenize,ner')
+            names = [
+                ('PERSON', 'PER'),
+                ('LOC', 'LOC'),
+                ('GPE', 'LOC'),
+                ('NORP', 'GRP'),
+                ('ORG', 'CORP'),
+                ('PRODUCT', 'PROD'),
+                ('WORK_OF_ART', 'CW')
+            ]
+            self.conversion: Dict[str, str] = {}
+            for theirs, ours in names:
+                self.conversion['B-' + theirs] = 'B-' + ours
+                self.conversion['I-' + theirs] = 'I-' + ours
+                self.conversion['E-' + theirs] = 'I-' + ours
+                self.conversion['S-' + theirs] = 'B-' + ours
+            
         
         else:
             raise ValueError('I don\'t know this style of model')
         
-        self.model.eval()
+        if style != 'stanza':
+            self.model.eval()
+        
+       
     
     def train_new_model(self):
         trainset = dataset.NerDataset(threshold=2, window_size=100)
@@ -127,3 +154,18 @@ class NerdTagger:
             ]
             labels.append(str_predictions)
         return labels
+        
+        # compare with stanza just to get an idea: spoiler - it's bad
+        # if self.style == 'stanza':
+        #     out = []
+        #     for sentence_list in tokens:
+        #         sentence: str = ' '.join(sentence_list)
+        #         # this is going to hurt performance, but only 28 sentences have '-'
+        #         if '-' in sentence:
+        #             out.append(['O' * len(sentence_list)])
+        #         tags = self.nlp(sentence).get(['ner'], from_token=True)
+        #         tags = list(map(
+        #             lambda x: self.conversion[x] if x in self.conversion else 'O',
+        #             tags))
+        #         out.append(tags)
+        #     return out

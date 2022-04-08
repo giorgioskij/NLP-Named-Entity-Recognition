@@ -10,10 +10,22 @@
 # standard crossentropy, bidirectional, batch 32
 
 import os
-from .nerdtagger import NerdTagger
 os.chdir('../../')
 
-m = NerdTagger(style='glove')
-print(m.predict([['hi', 'my', 'name', 'is', 'Giorgio']]))
+from hw1.stud import dataset
+from hw1.stud.nerdtagger import NerdTagger
+from pathlib import Path
 
-m.test()
+# m = NerdTagger(style='glove')
+# print(m.predict([['hi', 'my', 'name', 'is', 'Giorgio']]))
+#
+# m.test()
+
+m = NerdTagger(style='stanza')
+trainset = dataset.NerDataset(path=Path('data/train.tsv'))
+devset = dataset.NerDataset(path=Path('data/dev.tsv'), vocab=trainset.vocab)
+tokens = [s[0] for s in devset.sentences]
+
+out = m.predict((tokens))
+
+pass
