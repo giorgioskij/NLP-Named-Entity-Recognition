@@ -4,11 +4,10 @@ from typing import Dict, List, Optional, Tuple
 import torch
 from torch import nn
 import torch.utils.data
-
+import stanza
 from seqeval import metrics
 
-from . import dataset, lstm
-import stanza
+from . import dataset, lstm, config
 
 
 class NerdTagger:
@@ -21,7 +20,7 @@ class NerdTagger:
     def __init__(self,
                  style: str = 'original',
                  retrain: bool = False,
-                 device: Optional[str] = None):
+                 device: Optional[torch.device] = None):
         """Initialize a NerdTagger of a specific type
 
         Args:
@@ -30,7 +29,7 @@ class NerdTagger:
                 Defaults to 'original'.
             retrain (bool, optional):
                 whether to retrain the model. Defaults to False.
-            device (Optional[str], optional):
+            device (Optional[torch.device], optional):
                 'cpu' or 'cuda'. Defaults to None.
 
         Raises:
@@ -41,7 +40,7 @@ class NerdTagger:
         self.vocab: dataset.Vocabulary
 
         self.style: str = style
-        self.device: str = 'cuda:0' if torch.cuda.is_available() else 'cpu'
+        self.device: torch.device = config.DEVICE
         if device is not None:
             self.device = device
 
@@ -49,7 +48,7 @@ class NerdTagger:
             print('Generating good old fashioned Bi-LSTM')
             self.lower = True
             self.vocab = dataset.Vocabulary(threshold=2,
-                                            path=Path('model/vocab.pkl'))
+                                            path=config.MODEL / 'vocab.pkl')
             self.model = lstm.NerModel(n_classes=13,
                                        embedding_dim=100,
                                        vocab_size=len(self.vocab),
@@ -59,15 +58,16 @@ class NerdTagger:
                                        use_pos=False).to(self.device)
             if not retrain:
                 self.model.load_state_dict(
-                    torch.load('model/6033bi.pth',
-                               map_location=torch.device(self.device)))
+                    torch.load(config.MODEL / '6033bi.pth',
+                               map_location=self.device))
 
         elif 'pos' in self.style.lower():
             print('Generating Bi-LSTM with glove embeddings '
                   'and stanza\'s pos extractor, hidden size 200 and double'
                   'linear layer')
             self.lower = True
-            self.vocab = dataset.Vocabulary(path=Path('model/glove-vocab.pkl'))
+            self.vocab = dataset.Vocabulary(path=config.MODEL /
+                                            'glove-vocab.pkl')
             self.model = lstm.NerModel(n_classes=13,
                                        embedding_dim=100,
                                        vocab_size=len(self.vocab),
@@ -78,12 +78,14 @@ class NerdTagger:
                                        freeze_weights=False,
                                        double_linear=False,
                                        use_pos=True).to(self.device)
-            self.model.load_state_dict(torch.load('model/emb-100-pos.pth'))
+            self.model.load_state_dict(
+                torch.load(config.MODEL / 'emb-100-pos.pth'))
 
         elif self.style == 'glove':
             print('Generating Bi-LSTM with glove embeddings')
             self.lower = True
-            self.vocab = dataset.Vocabulary(path=Path('model/glove-vocab.pkl'))
+            self.vocab = dataset.Vocabulary(path=config.MODEL /
+                                            'glove-vocab.pkl')
             self.model = lstm.NerModel(n_classes=13,
                                        embedding_dim=100,
                                        vocab_size=len(self.vocab),
@@ -96,12 +98,12 @@ class NerdTagger:
                                        use_pos=False).to(self.device)
             if retrain:
                 self.model.load_state_dict(
-                    torch.load('model/emb-100.pth',
-                               map_location=torch.device(self.device)))
+                    torch.load(config.MODEL / 'emb-100.pth',
+                               map_location=self.device))
             else:
                 self.model.load_state_dict(
-                    torch.load('model/6965-bi-nofreeze-glove.pth',
-                               map_location=torch.device(self.device)))
+                    torch.load(config.MODEL / '6965-bi-nofreeze-glove.pth',
+                               map_location=self.device))
 
         elif self.style == 'stanza':
             # compare with performance of stanza
@@ -139,20 +141,18 @@ class NerdTagger:
                 tokenize_pretokenized=True,
                 logging_level='FATAL')
 
-            trainset = dataset.NerDatasetPos(path=Path('data/train.tsv/'),
+            trainset = dataset.NerDatasetPos(path=config.TRAIN,
                                              pos_tagger=pos_tagger,
                                              vocab=self.vocab)
             # self.vocab: dataset.Vocabulary = trainset.vocab
-            devset = dataset.NerDatasetPos(path=Path('data/dev.tsv'),
+            devset = dataset.NerDatasetPos(path=config.DEV,
                                            vocab=self.vocab,
                                            pos_tagger=pos_tagger)
 
         else:
-            trainset = dataset.NerDataset(path=Path('data/train.tsv'),
-                                          vocab=self.vocab)
+            trainset = dataset.NerDataset(path=config.TRAIN, vocab=self.vocab)
             # self.vocab: dataset.Vocabulary = trainset.vocab
-            devset = dataset.NerDataset(path=Path('data/dev.tsv'),
-                                        vocab=self.vocab)
+            devset = dataset.NerDataset(path=config.DEV, vocab=self.vocab)
 
         trainloader, devloader = dataset.get_dataloaders(trainset,
                                                          devset,
@@ -176,7 +176,7 @@ class NerdTagger:
                                   verbose=True,
                                   device=self.device,
                                   f1_average='macro',
-                                  save_path=Path('model/'))
+                                  save_path=config.MODEL)
 
         print(f'Starting to train the model: \n{self.model}')
         print(
@@ -184,8 +184,7 @@ class NerdTagger:
         )
         lstm.train(self.model, trainloader, devloader, params)
 
-    def test(
-        self, path: Path = Path('data/dev.tsv')) -> Tuple[float, float, float]:
+    def test(self, path: Path = config.DEV) -> Tuple[float, float, float]:
         """Test the tagger against a dataset
 
         Args:
@@ -212,15 +211,16 @@ class NerdTagger:
                                   verbose=True,
                                   device=self.device,
                                   f1_average='macro',
-                                  save_path=Path('model/'))
+                                  save_path=config.MODEL)
         acc, loss, f1 = lstm.test(self.model, devloader, params=params)
         return acc, loss, f1
 
-    def test_stanza(
-        self, path: Path = Path('data/dev.tsv')) -> Tuple[float, float, float]:
+    def test_stanza(self,
+                    path: Path = config.DEV) -> Tuple[float, float, float]:
 
-        devset = dataset.NerDataset(
-            path=path, vocab=dataset.Vocabulary(path=Path('model/vocab.pkl')))
+        devset = dataset.NerDataset(path=path,
+                                    vocab=dataset.Vocabulary(path=config.MODEL /
+                                                             'vocab.pkl'))
 
         true_labels = list(map(lambda x: x[1], devset.sentences))
         tokens = list(map(lambda x: x[0], devset.sentences))

@@ -1,16 +1,12 @@
 """Loads and builds the model
 """
 
-from typing import Dict, List, Optional
-
+from typing import List, Optional
 import numpy as np
 import torch
-
 from model import Model  # type: ignore
-###
-from .nerdtagger import NerdTagger
-
-###
+from . import nerdtagger
+from . import config
 
 
 def build_model(device: str) -> Model:
@@ -45,11 +41,11 @@ class RandomBaseline(Model):
 class StudentModel(Model):
 
     def __init__(self, device: Optional[str] = None):
-        self.device: str = 'cuda:0' if torch.cuda.is_available() else 'cpu'
-        if device is not None:
-            self.device = device
+        self.device: torch.device = config.DEVICE
+        if device:
+            self.device = torch.device(device)
 
-        self.tagger = NerdTagger(style='stanza', device=device)
+        self.tagger = nerdtagger.NerdTagger(style='glove', device=device)
 
     def predict(self, tokens: List[List[str]]) -> List[List[str]]:
         return self.tagger.predict(tokens)

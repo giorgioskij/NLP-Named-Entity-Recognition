@@ -1,19 +1,44 @@
 """Main file for interactive training and testing
 """
+#%% imports
+from pathlib import Path
+import sys
+import torch
+from torch import nn
+from torch.utils.data import DataLoader
 
-# 44.07 with lr=0.01, no weight decay, standard crossentropy, 400 epochs
+sys.path.append(str(Path(__file__).parent.parent))
 
-# 43.72 with lr=0.001, no weight decay, mom=0.9,
-# standard crossentropy, 200 epochs
+from stud.nerdtagger import NerdTagger
+from stud import pretrained
+from stud import dataset
+from stud import config
+from stud import lstm
+from stud import conll
+from stud import hypers
 
-# 60.33 with lr=0.001, no weight decay, m=0.9, 400 ep,
-# standard crossentropy, bidirectional, batch 32
+device = config.DEVICE
 
-from hw1.stud.nerdtagger import NerdTagger
+#%% load and test
 
-tagger = NerdTagger(style='pos', retrain=True)
-# print(m.predict([['hi', 'my', 'name', 'is', 'Giorgio']]))
+# vocab
+vocab = dataset.Vocabulary(path=config.MODEL / 'vocab-glove.pkl')
 
-# tagger.test()
+# dataset
+trainloader, devloader = dataset.get_dataloaders(vocab)
 
-# using pos, the classic model gets to 61.37
+# model
+model = lstm.NerModel(n_classes=13,
+                      embedding_dim=100,
+                      vocab_size=len(vocab),
+                      padding_idx=vocab.pad_label_id,
+                      hidden_size=200,
+                      bidirectional=True,
+                      double_linear=True).to(config.DEVICE)
+params = hypers.get_default_params(model, vocab)
+
+# test
+model.load_state_dict(torch.load(config.MODEL / '7071-glove-200h-double.pth'))
+lstm.test(model, devloader, params)
+
+# train

@@ -2,7 +2,7 @@
 Implements Deep Learning-related stuff to perform Named Entity Classification
 """
 
-from typing import List, Optional, Tuple
+from typing import Optional, Tuple
 import time
 import pathlib
 from datetime import datetime
@@ -14,8 +14,6 @@ from torch import nn
 from seqeval import metrics
 
 from . import dataset
-
-import stanza
 
 
 @dataclass
@@ -30,7 +28,7 @@ class TrainParams:
     epochs: int
     log_steps: Optional[int]
     verbose: bool
-    device: str
+    device: torch.device
     f1_average: str
     save_path: pathlib.Path
 

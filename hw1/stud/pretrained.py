@@ -6,18 +6,14 @@ the best results were achieved loading pretrained embeddings and fine-tuning
 them, with double_linear = False and hidden_dim of the lstm = 200
 """
 
-from pathlib import Path
 from typing import List
-import os
-
 import gensim.downloader
 from gensim.models.keyedvectors import KeyedVectors
 import numpy as np
 import torch
 from torch import nn
 
-from hw1.stud import dataset
-from hw1.stud import lstm
+from . import dataset, lstm, config
 
 
 def compare_vocabularies():
@@ -64,8 +60,8 @@ def merge_pretrained_embeddings(save_stuff: bool = False,
     glove_words: set[str] = set(embeddings.index_to_key)
 
     # set of words in our dataset
-    trainset: dataset.NerDataset = dataset.NerDataset(
-        path=Path('data/train.tsv'), threshold=2)
+    trainset: dataset.NerDataset = dataset.NerDataset(path=config.TRAIN,
+                                                      threshold=2)
     our_vocab: dataset.Vocabulary = trainset.vocab
     our_words: set[str] = {our_vocab[i] for i in range(len(our_vocab))}
 
@@ -109,9 +105,9 @@ def merge_pretrained_embeddings(save_stuff: bool = False,
 
     if save_stuff:
         print('Saving the model')
-        torch.save(model.state_dict(), 'model/pre_bi_merged.pth')
+        torch.save(model.state_dict(), config.MODEL / 'pre_bi_merged.pth')
         print('Saving the vocab')
-        vocab.dump_data(Path('model/glove_vocab_merged.pkl'))
+        vocab.dump_data(config.MODEL / 'glove_vocab_merged.pkl')
     return model, vocab
 
 
@@ -151,18 +147,17 @@ def build_pretrained_embeddings(save_stuff: bool = False,
 
     if save_stuff:
         print('Saving the model')
-        torch.save(model.state_dict(), 'model/emb-100.pth')
+        torch.save(model.state_dict(), config.MODEL / 'emb-100.pth')
         print('Saving the vocab')
-        vocab.dump_data(Path('model/glove-vocab.pkl'))
+        vocab.dump_data(config.MODEL / 'glove-vocab.pkl')
     return model, vocab
 
 
 def fine_tune(vocab: dataset.Vocabulary, model: lstm.NerModel):
-    device = 'cuda:0' if torch.cuda.is_available() else 'cpu'
-    torch.manual_seed(42)
+    device = config.DEVICE
 
-    trainset = dataset.NerDataset(path=Path('data/train.tsv'), vocab=vocab)
-    devset = dataset.NerDataset(path=Path('data/dev.tsv'), vocab=vocab)
+    trainset = dataset.NerDataset(path=config.TRAIN, vocab=vocab)
+    devset = dataset.NerDataset(path=config.DEV, vocab=vocab)
 
     # dataloaders
     trainloader, devloader = dataset.get_dataloaders(trainset,
@@ -187,7 +182,7 @@ def fine_tune(vocab: dataset.Vocabulary, model: lstm.NerModel):
                               verbose=True,
                               device=device,
                               f1_average='macro',
-                              save_path=Path('model/'))
+                              save_path=config.MODEL)
 
     lstm.train(model, trainloader, devloader, params)
 
@@ -196,12 +191,3 @@ def fine_tune(vocab: dataset.Vocabulary, model: lstm.NerModel):
     # misaligned. We have to build a new dictionary from the actual embeddings
 
     # 63.22 with lr=0.001 m=0.9 bs=128, pretrained, bidirectional
-
-
-model, vocab = build_pretrained_embeddings(save_stuff=False,
-                                           freeze=False,
-                                           double_linear=False,
-                                           use_pos=False,
-                                           hidden_size=100)
-
-fine_tune(vocab, model)

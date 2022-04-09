@@ -5,12 +5,12 @@ Contains classes and functions for the management of the data
 from typing import Dict, List, Optional, Tuple, Union, Iterable
 from collections import Counter
 from pathlib import Path
+from tqdm import tqdm
 import pickle
-
 import torch
 import torch.utils.data
-from tqdm import tqdm
 import stanza
+from . import config
 
 
 class PosVocabulary:
@@ -238,7 +238,7 @@ class NerDataset(torch.utils.data.Dataset):
     """
 
     def __init__(self,
-                 path: Path = Path('data/train.tsv'),
+                 path: Path = config.TRAIN,
                  vocab: Optional[Vocabulary] = None,
                  threshold: int = 2,
                  window_size: int = 100,
@@ -288,6 +288,16 @@ class NerDataset(torch.utils.data.Dataset):
         self.vocab: Vocabulary = (Vocabulary(self.sentences,
                                              threshold=self.threshold)
                                   if vocab is None else vocab)
+        # this should become a subclass ConllNerDatatset
+        if self.is_conll:
+            labels: set[str] = {
+                l for sentence in self.sentences for l in sentence[1]
+            }
+            self.vocab.ltos = sorted(list(labels) + ['PAD'])
+            self.vocab.stol = {s: i for i, s in enumerate(self.vocab.ltos)}
+            self.vocab.pad_label_id = 9
+            self.vocab.n_labels = 9
+        ###
         self.indexed_data: List[Tuple[List[int], List[int]]] = self.index_data()
         self.windows: List[Tuple[torch.Tensor,
                                  torch.Tensor]] = self.build_windows()
@@ -302,7 +312,7 @@ class NerDataset(torch.utils.data.Dataset):
             lines = list(map(str.strip, f.readlines()))[2:]
             for line_str in tqdm(lines, desc='Reading data', total=len(lines)):
 
-                if not line_str and len(words):
+                if not line_str and words:
                     sentences.append((words, labels))
                     words = []
                     labels = []
@@ -403,27 +413,36 @@ class NerDataset(torch.utils.data.Dataset):
 
 
 def get_dataloaders(
-    trainset: NerDataset,
-    devset: NerDataset,
+    vocab: Optional[Vocabulary] = None,
+    trainset: Optional[NerDataset] = None,
+    devset: Optional[NerDataset] = None,
     batch_size_train: int = 128,
     batch_size_dev: int = 256
 ) -> Tuple[torch.utils.data.DataLoader, torch.utils.data.DataLoader]:
     """Return the dataloaders from the given datasets
 
     Args:
-        trainset (NerDataset): dataset for training
-        devset (NerDataset): dataset for evaluation
+        trainset (NerDataset, optional): dataset for training
+        devset (NerDataset, optional): dataset for evaluation
         batch_size (int, optional): Batch size. Defaults to 64.
 
     Returns:
         Tuple[Dataloader, Dataloader]: the dataloaders
     """
+    if trainset is None or devset is None:
+        trainset, devset = get_datasets(vocab)
     return (
         torch.utils.data.DataLoader(trainset,
                                     batch_size=batch_size_train,
                                     shuffle=True),
         torch.utils.data.DataLoader(devset, batch_size=batch_size_dev),
     )
+
+
+def get_datasets(vocab: Optional[Vocabulary] = None):
+    trainset: NerDataset = NerDataset(config.TRAIN, vocab)
+    devset: NerDataset = NerDataset(config.DEV, trainset.vocab)
+    return trainset, devset
 
 
 class NerDatasetPos(NerDataset):
@@ -434,7 +453,7 @@ class NerDatasetPos(NerDataset):
 
     def __init__(
         self,
-        path: Path = Path('data/train.tsv'),
+        path: Path = config.TRAIN,
         pos_tagger: Optional[stanza.Pipeline] = None,
         vocab: Optional[Vocabulary] = None,
         threshold: int = 2,

@@ -69,7 +69,7 @@ def main(test_path: str, endpoint: str, batch_size=32):
         exit(1)
 
     # TODO: change this back to 10
-    max_try = 10
+    max_try = 2
     iterator = iter(range(max_try))
 
     while True:
@@ -88,13 +88,16 @@ def main(test_path: str, endpoint: str, batch_size=32):
             )
             exit(1)
 
-        logging.info(f"Waiting 10 second for server to go up: trial {i}/{max_try}")
+        logging.info(
+            f"Waiting 10 second for server to go up: trial {i}/{max_try}")
         time.sleep(10)
 
         try:
             response = requests.post(
-                endpoint, json={"tokens_s": [["My", "name", "is", "Robin", "Hood"]]}
-            ).json()
+                endpoint,
+                json={
+                    "tokens_s": [["My", "name", "is", "Robin", "Hood"]]
+                }).json()
             response["predictions_s"]
             logging.info("Connection succeded")
             break
@@ -108,8 +111,9 @@ def main(test_path: str, endpoint: str, batch_size=32):
 
     predictions_s = []
 
-    for i in track(range(0, len(tokens_s), batch_size), description="Evaluating"):
-        batch = tokens_s[i : i + batch_size]
+    for i in track(range(0, len(tokens_s), batch_size),
+                   description="Evaluating"):
+        batch = tokens_s[i:i + batch_size]
         try:
             response = requests.post(endpoint, json={"tokens_s": batch}).json()
             predictions_s += response["predictions_s"]
@@ -142,9 +146,9 @@ def main(test_path: str, endpoint: str, batch_size=32):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument(
-        "file", type=str, help="File containing data you want to evaluate upon"
-    )
+    parser.add_argument("file",
+                        type=str,
+                        help="File containing data you want to evaluate upon")
     args = parser.parse_args()
 
     main(test_path=args.file, endpoint="http://127.0.0.1:12345")
