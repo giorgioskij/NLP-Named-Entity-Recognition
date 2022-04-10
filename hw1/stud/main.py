@@ -38,7 +38,7 @@ model = lstm.NerModel(n_classes=13,
 params = hypers.get_default_params(model, vocab)
 
 # test
-model.load_state_dict(torch.load(config.MODEL / '7071-glove-200h-double.pth'))
+model.load_state_dict(torch.load(config.MODEL / '7071-glove-200h-double.pth', map_location=config.DEVICE))
 lstm.test(model, devloader, params)
 
 # train
