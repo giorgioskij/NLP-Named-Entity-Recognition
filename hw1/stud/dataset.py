@@ -417,6 +417,7 @@ def get_dataloaders(
     trainset: Optional[NerDataset] = None,
     devset: Optional[NerDataset] = None,
     use_pos: bool = False,
+    window_size: int = 100,
     batch_size_train: int = 128,
     batch_size_dev: int = 256
 ) -> Tuple[torch.utils.data.DataLoader, torch.utils.data.DataLoader]:
@@ -431,7 +432,9 @@ def get_dataloaders(
         Tuple[Dataloader, Dataloader]: the dataloaders
     """
     if trainset is None or devset is None:
-        trainset, devset = get_datasets(vocab, use_pos=use_pos)
+        trainset, devset = get_datasets(vocab,
+                                        use_pos=use_pos,
+                                        window_size=window_size)
     return (
         torch.utils.data.DataLoader(trainset,
                                     batch_size=batch_size_train,
@@ -440,10 +443,16 @@ def get_dataloaders(
     )
 
 
-def get_datasets(vocab: Optional[Vocabulary] = None, use_pos: bool = False):
+def get_datasets(vocab: Optional[Vocabulary] = None,
+                 use_pos: bool = False,
+                 window_size: int = 100):
     if use_pos:
-        trainset: NerDataset = NerDatasetPos(config.TRAIN, vocab=vocab)
-        devset: NerDataset = NerDatasetPos(config.DEV, vocab=trainset.vocab)
+        trainset: NerDataset = NerDatasetPos(config.TRAIN,
+                                             vocab=vocab,
+                                             window_size=window_size)
+        devset: NerDataset = NerDatasetPos(config.DEV,
+                                           vocab=trainset.vocab,
+                                           window_size=window_size)
         return trainset, devset
 
     trainset: NerDataset = NerDataset(config.TRAIN, vocab=vocab)

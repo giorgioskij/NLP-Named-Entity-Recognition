@@ -1,6 +1,7 @@
 """Main file for interactive training and testing
 """
 #%% imports
+from curses import window
 from pathlib import Path
 import sys
 import torch
@@ -26,7 +27,9 @@ print('Loading data...')
 vocab = dataset.Vocabulary(path=config.MODEL / 'vocab-glove.pkl')
 
 # dataset
-trainloader, devloader = dataset.get_dataloaders(vocab, use_pos=True)
+trainloader, devloader = dataset.get_dataloaders(vocab,
+                                                 use_pos=True,
+                                                 window_size=50)
 
 # model
 model = lstm.NerModel(n_classes=13,
@@ -39,6 +42,7 @@ model = lstm.NerModel(n_classes=13,
                       use_pos=True).to(config.DEVICE)
 params = hypers.get_default_params(model, vocab)
 
+#%%
 # test
 # model.load_state_dict(
 #     torch.load(config.MODEL / '7071-glove-200h-double.pth',

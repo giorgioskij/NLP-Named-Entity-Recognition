@@ -97,7 +97,7 @@ class NerModel(nn.Module):
         # print(f'emb: {embeddings.shape}')
 
         if self.use_pos and pos_tags is not None:
-            oh: torch.Tensor = functional.one_hot(pos_tags)
+            oh: torch.Tensor = functional.one_hot(pos_tags, num_classes=17)
             embeddings = torch.cat((embeddings, oh), dim=-1)
             # embeddings = torch.cat((embeddings, pos_tags.unsqueeze(-1)), dim=2)
 
