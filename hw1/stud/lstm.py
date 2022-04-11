@@ -141,8 +141,11 @@ class NerModel(nn.Module):
 #                          freeze_weights, double_linear)
 
 
-def train(model: NerModel, trainloader: torch.utils.data.DataLoader,
-          devloader: torch.utils.data.DataLoader, params: TrainParams) -> None:
+def train(model: NerModel,
+          trainloader: torch.utils.data.DataLoader,
+          devloader: torch.utils.data.DataLoader,
+          params: TrainParams,
+          logic: bool = False) -> None:
     """Trains the model
 
     Args:
@@ -183,7 +186,8 @@ def train(model: NerModel, trainloader: torch.utils.data.DataLoader,
             accuracy, _, f1 = run_epoch(model=model,
                                         dataloader=devloader,
                                         params=params,
-                                        evaluate=True)
+                                        evaluate=True,
+                                        logic=logic)
 
             # save the best model
             metric = f1
@@ -221,7 +225,8 @@ def train(model: NerModel, trainloader: torch.utils.data.DataLoader,
 def run_epoch(model: NerModel,
               dataloader: torch.utils.data.DataLoader,
               params: TrainParams,
-              evaluate: bool = False) -> Tuple[float, float, float]:
+              evaluate: bool = False,
+              logic: bool = True) -> Tuple[float, float, float]:
     """Runs a single epoch on the given dataloader
 
     Args:
@@ -258,6 +263,9 @@ def run_epoch(model: NerModel,
         # evaluate predictions
         predictions = torch.argmax(outputs, dim=1)
 
+        if evaluate and logic:
+            predictions = apply_logic(predictions)
+
         # exclude padding from stats
         real_predictions = predictions[labels != params.vocab.pad_label_id]
         real_labels = labels[labels != params.vocab.pad_label_id]
@@ -286,6 +294,24 @@ def run_epoch(model: NerModel,
         average=params.f1_average)  # type: ignore
 
     return accuracy, loss, f1
+
+
+def apply_logic(tags: torch.Tensor) -> torch.Tensor:
+    new_predictions: torch.Tensor = torch.zeros_like(tags).long()
+    for i, sentence in enumerate(tags):
+        for j, tag in sentence:
+            if not j:
+                if (6 <= tag <= 11):
+                    new_predictions[i][j] = tag - 5
+                else:
+                    new_predictions[i][j] = tag
+                new_predictions[i][j] = tag
+            elif (6 <= tag <= 11) and (sentence[j - i] != (tag - 5)):
+                new_predictions[i][j] = tag - 5
+            else:
+                new_predictions[i][i] = tag
+
+    return new_predictions
 
 
 def step(model: NerModel,
@@ -320,9 +346,11 @@ def step(model: NerModel,
     return loss.item(), outputs
 
 
-def test(model: NerModel, dataloader: torch.utils.data.DataLoader,
-         params: TrainParams):
-    acc, loss, f1 = run_epoch(model, dataloader, params, True)
+def test(model: NerModel,
+         dataloader: torch.utils.data.DataLoader,
+         params: TrainParams,
+         logic: bool = True):
+    acc, loss, f1 = run_epoch(model, dataloader, params, True, logic)
 
     if params.verbose:
         print(f'Accuracy: {acc:.2%} | Loss: {loss:.4f} | F1: {f1:.2%}')

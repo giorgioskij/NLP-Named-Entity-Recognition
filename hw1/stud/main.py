@@ -53,13 +53,18 @@ params = hypers.get_default_params(model, vocab)
 
 #%%
 # test
-# model.load_state_dict(
-#     torch.load(config.MODEL / '7071-glove-200h-double.pth',
-#                map_location=config.DEVICE))
-# lstm.test(model, devloader, params)
+model.load_state_dict(
+    torch.load(config.MODEL / '6910-glove-200-double-pos.pth',
+               map_location=config.DEVICE))
+lstm.test(model, devloader, params, logic=False)
+
+model.load_state_dict(
+    torch.load(config.MODEL / '6910-glove-200-double-pos.pth',
+               map_location=config.DEVICE))
+lstm.test(model, devloader, params, logic=True)
 
 # train
-model.load_state_dict(
-    torch.load(config.MODEL / 'emb-200-double-pos.pth',
-               map_location=config.DEVICE))
-lstm.train(model, trainloader, devloader, params)
+# model.load_state_dict(
+#     torch.load(config.MODEL / 'emb-200-double-pos.pth',
+#                map_location=config.DEVICE))
+# lstm.train(model, trainloader, devloader, params)
