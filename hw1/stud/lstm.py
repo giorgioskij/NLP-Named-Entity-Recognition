@@ -11,6 +11,7 @@ from dataclasses import dataclass
 import torch
 import torch.utils.data
 from torch import nn
+from torch.nn import functional
 from seqeval import metrics
 
 from . import dataset
@@ -69,7 +70,8 @@ class NerModel(nn.Module):
                 self.embedding.requires_grad_(False)
 
         self.lstm = nn.LSTM(
-            input_size=embedding_dim if not self.use_pos else embedding_dim + 1,
+            input_size=embedding_dim if not self.use_pos else embedding_dim +
+            17,
             hidden_size=hidden_size,
             batch_first=True,
             bidirectional=bidirectional)
@@ -95,7 +97,9 @@ class NerModel(nn.Module):
         # print(f'emb: {embeddings.shape}')
 
         if self.use_pos and pos_tags is not None:
-            embeddings = torch.cat((embeddings, pos_tags.unsqueeze(-1)), dim=2)
+            oh: torch.Tensor = functional.one_hot(pos_tags)
+            embeddings = torch.cat((embeddings, oh), dim=-1)
+            # embeddings = torch.cat((embeddings, pos_tags.unsqueeze(-1)), dim=2)
 
         lstm_out, _ = self.lstm(embeddings)
         lstm_out = self.dropout(lstm_out)

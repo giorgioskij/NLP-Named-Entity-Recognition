@@ -416,6 +416,7 @@ def get_dataloaders(
     vocab: Optional[Vocabulary] = None,
     trainset: Optional[NerDataset] = None,
     devset: Optional[NerDataset] = None,
+    use_pos: bool = False,
     batch_size_train: int = 128,
     batch_size_dev: int = 256
 ) -> Tuple[torch.utils.data.DataLoader, torch.utils.data.DataLoader]:
@@ -430,7 +431,7 @@ def get_dataloaders(
         Tuple[Dataloader, Dataloader]: the dataloaders
     """
     if trainset is None or devset is None:
-        trainset, devset = get_datasets(vocab)
+        trainset, devset = get_datasets(vocab, use_pos=use_pos)
     return (
         torch.utils.data.DataLoader(trainset,
                                     batch_size=batch_size_train,
@@ -439,9 +440,14 @@ def get_dataloaders(
     )
 
 
-def get_datasets(vocab: Optional[Vocabulary] = None):
-    trainset: NerDataset = NerDataset(config.TRAIN, vocab)
-    devset: NerDataset = NerDataset(config.DEV, trainset.vocab)
+def get_datasets(vocab: Optional[Vocabulary] = None, use_pos: bool = False):
+    if use_pos:
+        trainset: NerDataset = NerDatasetPos(config.TRAIN, vocab=vocab)
+        devset: NerDataset = NerDatasetPos(config.DEV, vocab=trainset.vocab)
+        return trainset, devset
+
+    trainset: NerDataset = NerDataset(config.TRAIN, vocab=vocab)
+    devset: NerDataset = NerDataset(config.DEV, vocab=trainset.vocab)
     return trainset, devset
 
 
@@ -502,17 +508,17 @@ class NerDatasetPos(NerDataset):
         print('Built dataset!')
 
         self.indexed_data: List[Tuple[List[int], List[int],
-                                      List[float]]] = self.index_data()
+                                      List[int]]] = self.index_data()
         self.windows: List[Tuple[torch.Tensor, torch.Tensor,
                                  torch.Tensor]] = self.build_windows()
 
-    def index_data(self) -> List[Tuple[List[int], List[int], List[float]]]:
+    def index_data(self) -> List[Tuple[List[int], List[int], List[int]]]:
         data = list(
             map(
                 lambda sentence:
-                ([self.vocab.get_word_id(w) for w in sentence[0]], [
-                    self.vocab.get_label_id(l) for l in sentence[1]
-                ], [float(self.pos_vocab[p]) for p in sentence[2]]),
+                ([self.vocab.get_word_id(w) for w in sentence[0]
+                 ], [self.vocab.get_label_id(l) for l in sentence[1]],
+                 [int(self.pos_vocab.label_to_index[p]) for p in sentence[2]]),
                 self.sentences))
         return data
 
