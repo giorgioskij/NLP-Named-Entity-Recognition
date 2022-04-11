@@ -263,9 +263,6 @@ def run_epoch(model: NerModel,
         # evaluate predictions
         predictions = torch.argmax(outputs, dim=1)
 
-        print(f'{predictions.shape=}')
-        break
-
         if evaluate and logic:
             predictions = apply_logic(predictions)
 
@@ -299,23 +296,37 @@ def run_epoch(model: NerModel,
     return accuracy, loss, f1
 
 
+# def apply_logic(tags: torch.Tensor) -> torch.Tensor:
+
+#     new_predictions: torch.Tensor = torch.zeros_like(tags).long()
+#     for i, sentence in enumerate(tags):
+#         for j, tag in enumerate(sentence):
+#             if not j:
+#                 if (6 <= tag <= 11):
+#                     new_predictions[i][j] = tag - 5
+#                 else:
+#                     new_predictions[i][j] = tag
+#                 new_predictions[i][j] = tag
+#             elif (6 <= tag <= 11) and (sentence[j - i] != (tag - 5)):
+#                 new_predictions[i][j] = tag - 5
+#             else:
+#                 new_predictions[i][i] = tag
+
+#     return new_predictions
+
+
 def apply_logic(tags: torch.Tensor) -> torch.Tensor:
 
-    new_predictions: torch.Tensor = torch.zeros_like(tags).long()
-    for i, sentence in enumerate(tags):
-        for j, tag in enumerate(sentence):
-            if not j:
-                if (6 <= tag <= 11):
-                    new_predictions[i][j] = tag - 5
-                else:
-                    new_predictions[i][j] = tag
-                new_predictions[i][j] = tag
-            elif (6 <= tag <= 11) and (sentence[j - i] != (tag - 5)):
-                new_predictions[i][j] = tag - 5
-            else:
-                new_predictions[i][i] = tag
+    new_tags: torch.Tensor = torch.zeros_like(tags).long()
+    for i, tag in enumerate(tags):
+        if not i:
+            new_tags[i] = tag
+        elif (6 <= tag <= 11) and (tags[i - 1] != (tag - 5)):
+            new_tags[i] = tag - 5
+        else:
+            new_tags[i] = tag
 
-    return new_predictions
+    return new_tags
 
 
 def step(model: NerModel,
