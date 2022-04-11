@@ -147,9 +147,9 @@ def build_pretrained_embeddings(save_stuff: bool = False,
 
     if save_stuff:
         print('Saving the model')
-        torch.save(model.state_dict(), config.MODEL / 'emb-100.pth')
-        print('Saving the vocab')
-        vocab.dump_data(config.MODEL / 'glove-vocab.pkl')
+        torch.save(model.state_dict(), config.MODEL / 'emb-200-double-pos.pth')
+        # print('Saving the vocab')
+        # vocab.dump_data(config.MODEL / 'glove-vocab.pkl')
     return model, vocab
 
 
