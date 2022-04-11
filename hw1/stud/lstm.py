@@ -299,7 +299,7 @@ def run_epoch(model: NerModel,
 def apply_logic(tags: torch.Tensor) -> torch.Tensor:
     new_predictions: torch.Tensor = torch.zeros_like(tags).long()
     for i, sentence in enumerate(tags):
-        for j, tag in sentence:
+        for j, tag in enumerate(sentence):
             if not j:
                 if (6 <= tag <= 11):
                     new_predictions[i][j] = tag - 5
