@@ -2,7 +2,7 @@
 Implements Deep Learning-related stuff to perform Named Entity Classification
 """
 
-from typing import Optional, Tuple
+from typing import List, Optional, Tuple
 import time
 import pathlib
 from datetime import datetime
@@ -315,21 +315,85 @@ def run_epoch(model: NerModel,
 #     return new_predictions
 
 
-def apply_logic(tags: torch.Tensor) -> torch.Tensor:
+def apply_logic(tags: torch.LongTensor) -> torch.Tensor:
+    """
+    Applies logic rules to verify a tag sequence and correct mistakes.
+    It uses the assumption that an I-TAG which follows anything but an I-TAG or 
+    a B-TAG of the same class is surely wrong, and tries to infer a new one 
+    based on a policy.
 
-    new_tags: torch.Tensor = torch.zeros_like(tags).long()
-    for i, tag in enumerate(tags):
-        if not i:
-            new_tags[i] = tag
-        elif ((6 <= tag <= 11) and (tags[i - 1] != (tag - 6)) and
-              (tags[i - 1] != tag)):
-            new_tags[i] = tag - 6
-            print(tags[i - 3:i + 2])
-            print(new_tags[i - 3:i + 2])
-        else:
-            new_tags[i] = tag
+    Args:
+        tags (torch.LongTensor): the tag sequence
+
+    Returns:
+        torch.Tensor: the correct tag sequence
+    """
+    new_tags: torch.Tensor = tags.clone()
+    for i in range(1, len(new_tags)):
+        tag = int(new_tags[i])
+        prev_tag = int(tags[i - 1])
+        # if tag is an I-TAG and the previous has not the same category
+        if 6 <= tag <= 11 and prev_tag != (tag - 6) and prev_tag != tag:
+            next_tag = int(tags[i + 1]) if i < len(tags) - 1 else 12
+            new_tags[i] = infer_tag(prev_tag, tag, next_tag)
 
     return new_tags
+
+
+# i-th tag is an I-TAG that is not following its corresponding B-TAG
+def infer_tag(prev_tag: int, current_tag: int, next_tag: int) -> int:
+    """
+    A minimal policy to infer a new tag based on the previous and the next one.
+    It IS possible to design a policy that never lowers the seqeval-F1 metric.
+    This one, however, accepts the possibility to introduce mistakes in very
+    rare cases, to favour more reasonable scenarios.
+
+    Args:
+        prev_tag (int): the previous tag
+        current_tag (int): the tag to replace
+        next_tag (int): the next tag
+
+    Returns:
+        int: the new inferred tag
+
+    --- Follows an exhaustive table of the policy ---
+    O  - I1 - I2  ->    B2
+    O  - I1 - O/B ->    B1
+
+    B0 - I1 - O/B ->    B1 (I0 could be ok but it can be worse)
+    B0 - I1 - I0  ->    I0 (never worse would be B0, but I0 is more reasonable)
+    B0 - I1 - I2  ->    B2
+
+    I0 - I1 - O/B ->    B1 (I0 could be ok but it can be worse)
+    I0 - I1 - I2  ->    B2
+    I0 - I1 - I0  ->    I0 (never worse would be B0, but I0 is more reasonable)
+
+    B2 if:
+        O  - I1 - I2
+        B0 - I1 - I2
+        I0 - I1 - I2
+        whenever it's followed by I2 (I2 has different tag from previous)
+
+    B1 if:
+        O  - I1 - O/B
+        B0 - I1 - O/B
+        I0 - I1 - O/B
+        whenever it's followed by O/B
+
+    I0 if:
+        B0 - I1 - I0
+        I0 - I1 - I0
+        whenever it's followed by I0 (I0 has same tag as previous)
+    """
+
+    # if it's followed by an O-TAG or a B-TAG, return the B version of itself
+    if next_tag < 6 or next_tag > 11:
+        return current_tag - 6
+    # if prev and next share the same category, return I-TAG of that category
+    if next_tag == prev_tag or next_tag == prev_tag + 6:
+        return next_tag
+    # otherwise, return B-TAG with the same category of the following I-tag
+    return next_tag - 6
 
 
 def step(model: NerModel,
