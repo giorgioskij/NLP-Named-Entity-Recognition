@@ -14,3 +14,5 @@ MODEL: Path = ROOT.parent / Path('model')
 
 TRAIN: Path = DATA / Path('train.tsv')
 DEV: Path = DATA / Path('dev.tsv')
+
+SEED: int = 42

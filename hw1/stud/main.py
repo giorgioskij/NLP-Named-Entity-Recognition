@@ -56,7 +56,7 @@ params = hypers.get_default_params(model, vocab)
 # lstm.test(model, devloader, params)
 
 # train
-model.load_state_dict(
-    torch.load(config.MODEL / 'emb-200-double-pos.pth',
-               map_location=config.DEVICE))
-lstm.train(model, trainloader, devloader, params)
+# model.load_state_dict(
+#     torch.load(config.MODEL / 'emb-200-double-pos.pth',
+#                map_location=config.DEVICE))
+# lstm.train(model, trainloader, devloader, params)

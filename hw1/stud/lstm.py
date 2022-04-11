@@ -12,9 +12,12 @@ import torch
 import torch.utils.data
 from torch import nn
 from torch.nn import functional
+import torch.backends.cudnn
 from seqeval import metrics
 
-from . import dataset
+from . import dataset, config
+
+# TODO: add fixed seed
 
 
 @dataclass
@@ -147,6 +150,12 @@ def train(model: NerModel, trainloader: torch.utils.data.DataLoader,
         devloader (nn.utils.data.DataLoader): dataloader for evaluation
         params (TrainParams): parameters
     """
+
+    torch.manual_seed(config.SEED)
+    torch.use_deterministic_algorithms(True)
+    torch.cuda.manual_seed(config.SEED)
+    torch.backends.cudnn.deterministic = True
+    torch.backends.cudnn.benchmark = False
 
     model.to(params.device)
     path = params.save_path / f"{datetime.now().strftime('%d%b-%H:%M')}.pth"

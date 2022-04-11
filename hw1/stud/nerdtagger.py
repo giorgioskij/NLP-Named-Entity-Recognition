@@ -85,7 +85,7 @@ class NerdTagger:
             print('Generating Bi-LSTM with glove embeddings')
             self.lower = True
             self.vocab = dataset.Vocabulary(path=config.MODEL /
-                                            'glove-vocab.pkl')
+                                            'vocab-glove.pkl')
             self.model = lstm.NerModel(n_classes=13,
                                        embedding_dim=100,
                                        vocab_size=len(self.vocab),
@@ -102,7 +102,7 @@ class NerdTagger:
                                map_location=self.device))
             else:
                 self.model.load_state_dict(
-                    torch.load(config.MODEL / '6965-bi-nofreeze-glove.pth',
+                    torch.load(config.MODEL / '6965-glove-100h.pth',
                                map_location=self.device))
 
         elif self.style == 'stanza':
