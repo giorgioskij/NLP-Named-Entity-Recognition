@@ -152,7 +152,6 @@ def train(model: NerModel, trainloader: torch.utils.data.DataLoader,
         params (TrainParams): parameters
     """
 
-    os.environ['CUBLAS_WORKSPACE_CONFIG'] = ':4096:8'
     torch.manual_seed(config.SEED)
     torch.use_deterministic_algorithms(True)
     torch.cuda.manual_seed(config.SEED)

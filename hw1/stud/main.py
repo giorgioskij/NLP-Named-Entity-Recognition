@@ -1,6 +1,9 @@
 """Main file for interactive training and testing
 """
 #%% imports
+import os
+
+os.environ['CUBLAS_WORKSPACE_CONFIG'] = ':4096:8'
 from curses import window
 from pathlib import Path
 import sys
@@ -56,7 +59,7 @@ params = hypers.get_default_params(model, vocab)
 # lstm.test(model, devloader, params)
 
 # train
-# model.load_state_dict(
-#     torch.load(config.MODEL / 'emb-200-double-pos.pth',
-#                map_location=config.DEVICE))
-# lstm.train(model, trainloader, devloader, params)
+model.load_state_dict(
+    torch.load(config.MODEL / 'emb-200-double-pos.pth',
+               map_location=config.DEVICE))
+lstm.train(model, trainloader, devloader, params)
