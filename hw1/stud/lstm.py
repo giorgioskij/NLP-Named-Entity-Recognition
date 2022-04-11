@@ -7,6 +7,7 @@ import time
 import pathlib
 from datetime import datetime
 from dataclasses import dataclass
+import os
 
 import torch
 import torch.utils.data
@@ -117,27 +118,27 @@ class NerModel(nn.Module):
         return clf_out
 
 
-class NerModelPos(NerModel):
-    """
-    An LSTM model that takes as input both word indices to compute embeddings
-    and a pos tag for each wordd
-    """
+# class NerModelPos(NerModel):
+#     """
+#     An LSTM model that takes as input both word indices to compute embeddings
+#     and a pos tag for each wordd
+#     """
 
-    def __init__(
-        self,
-        n_classes: int,
-        embedding_dim: int,
-        vocab_size: int,
-        padding_idx: int,
-        hidden_size: int,
-        bidirectional: bool = False,
-        pretrained_emb: Optional[torch.Tensor] = None,
-        freeze_weights: bool = False,
-        double_linear: bool = False,
-    ):
-        super().__init__(n_classes, embedding_dim + 1, vocab_size, padding_idx,
-                         hidden_size, bidirectional, pretrained_emb,
-                         freeze_weights, double_linear)
+#     def __init__(
+#         self,
+#         n_classes: int,
+#         embedding_dim: int,
+#         vocab_size: int,
+#         padding_idx: int,
+#         hidden_size: int,
+#         bidirectional: bool = False,
+#         pretrained_emb: Optional[torch.Tensor] = None,
+#         freeze_weights: bool = False,
+#         double_linear: bool = False,
+#     ):
+#         super().__init__(n_classes, embedding_dim + 1, vocab_size, padding_idx,
+#                          hidden_size, bidirectional, pretrained_emb,
+#                          freeze_weights, double_linear)
 
 
 def train(model: NerModel, trainloader: torch.utils.data.DataLoader,
@@ -151,6 +152,7 @@ def train(model: NerModel, trainloader: torch.utils.data.DataLoader,
         params (TrainParams): parameters
     """
 
+    os.environ['CUBLAS_WORKSPACE_CONFIG'] = ':4096:8'
     torch.manual_seed(config.SEED)
     torch.use_deterministic_algorithms(True)
     torch.cuda.manual_seed(config.SEED)
