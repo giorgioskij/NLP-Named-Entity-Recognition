@@ -368,32 +368,37 @@ def infer_tag(prev_tag: int, current_tag: int, next_tag: int) -> int:
     I0 - I1 - I2  ->    B2
     I0 - I1 - I0  ->    I0 (never worse would be B0, but I0 is more reasonable)
 
+     B1 if:
+        O  - I1 - O/B
+        B0 - I1 - O/B
+        I0 - I1 - O/B
+        whenever it's followed by O/B
+
     B2 if:
         O  - I1 - I2
         B0 - I1 - I2
         I0 - I1 - I2
         whenever it's followed by I2 (I2 has different tag from previous)
 
-    B1 if:
-        O  - I1 - O/B
-        B0 - I1 - O/B
-        I0 - I1 - O/B
-        whenever it's followed by O/B
-
     I0 if:
         B0 - I1 - I0
         I0 - I1 - I0
         whenever it's followed by I0 (I0 has same tag as previous)
+    
+    If we want to avoid any case in which the policy decreases the F1 score,
+    we use B0 instead of I0
     """
 
     # if it's followed by an O-TAG or a B-TAG, return the B version of itself
     if next_tag < 6 or next_tag > 11:
         return current_tag - 6
-    # if prev and next share the same category, return I-TAG of that category
-    if next_tag == prev_tag or next_tag == prev_tag + 6:
-        return next_tag
-    # otherwise, return B-TAG with the same category of the following I-tag
-    return next_tag - 6
+    # if next is an I-TAG of a different category from the previous
+    # return B-TAG with the same category as the following I-TAG
+    if next_tag != prev_tag and next_tag != prev_tag + 6:
+        return next_tag - 6
+    # otherwise
+    # return next_tag # more reasonable option
+    return current_tag - 6  # option that never worsens F1
 
 
 def step(model: NerModel,
