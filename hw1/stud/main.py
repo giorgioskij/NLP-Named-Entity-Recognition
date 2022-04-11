@@ -20,33 +20,33 @@ from stud import hypers
 
 device = config.DEVICE
 
-pretrained.build_pretrained_embeddings(save_stuff=True,
-                                       freeze=False,
-                                       double_linear=True,
-                                       use_pos=True,
-                                       hidden_size=200)
+# pretrained.build_pretrained_embeddings(save_stuff=True,
+#                                        freeze=False,
+#                                        double_linear=True,
+#                                        use_pos=True,
+#                                        hidden_size=200)
 
 #%% load and test
 
 # vocab
-# print('Loading data...')
-# vocab = dataset.Vocabulary(path=config.MODEL / 'vocab-glove.pkl')
+print('Loading data...')
+vocab = dataset.Vocabulary(path=config.MODEL / 'vocab-glove.pkl')
 
-# # dataset
-# trainloader, devloader = dataset.get_dataloaders(vocab,
-#                                                  use_pos=True,
-#                                                  window_size=50)
+# dataset
+trainloader, devloader = dataset.get_dataloaders(vocab,
+                                                 use_pos=True,
+                                                 window_size=50)
 
-# # model
-# model = lstm.NerModel(n_classes=13,
-#                       embedding_dim=100,
-#                       vocab_size=len(vocab),
-#                       padding_idx=vocab.pad_label_id,
-#                       hidden_size=200,
-#                       bidirectional=True,
-#                       double_linear=True,
-#                       use_pos=True).to(config.DEVICE)
-# params = hypers.get_default_params(model, vocab)
+# model
+model = lstm.NerModel(n_classes=13,
+                      embedding_dim=100,
+                      vocab_size=len(vocab),
+                      padding_idx=vocab.pad_label_id,
+                      hidden_size=200,
+                      bidirectional=True,
+                      double_linear=True,
+                      use_pos=True).to(config.DEVICE)
+params = hypers.get_default_params(model, vocab)
 
 #%%
 # test
@@ -56,4 +56,7 @@ pretrained.build_pretrained_embeddings(save_stuff=True,
 # lstm.test(model, devloader, params)
 
 # train
-# lstm.train(model, trainloader, devloader, params)
+model.load_state_dict(
+    torch.load(config.MODEL / 'emb-200-double-pos.pth',
+               map_location=config.DEVICE))
+lstm.train(model, trainloader, devloader, params)
