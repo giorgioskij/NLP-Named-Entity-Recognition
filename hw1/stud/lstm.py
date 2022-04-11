@@ -321,8 +321,11 @@ def apply_logic(tags: torch.Tensor) -> torch.Tensor:
     for i, tag in enumerate(tags):
         if not i:
             new_tags[i] = tag
-        elif (6 <= tag <= 11) and (tags[i - 1] != (tag - 5)):
-            new_tags[i] = tag - 5
+        elif ((6 <= tag <= 11) and (tags[i - 1] != (tag - 6)) and
+              (tags[i - 1] != tag)):
+            new_tags[i] = tag - 6
+            print(tags[i - 3:i + 2])
+            print(new_tags[i - 3:i + 2])
         else:
             new_tags[i] = tag
 
