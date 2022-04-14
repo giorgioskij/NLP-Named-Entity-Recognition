@@ -552,9 +552,102 @@ def step(model: NerModel,
 def test(model: NerModel,
          dataloader: torch.utils.data.DataLoader,
          params: TrainParams,
-         logic: bool = True):
+         logic: bool = False):
     acc, loss, f1 = run_epoch(model, dataloader, params, True, logic)
 
     if params.verbose:
         print(f'Accuracy: {acc:.2%} | Loss: {loss:.4f} | F1: {f1:.2%}')
     return acc, loss, f1
+
+
+def predict(model: nn.Module, vocab: dataset.Vocabulary,
+            tokens: List[List[str]], device: torch.device) -> List[List[str]]:
+    """Predict a bunch of human-readable sentences
+
+    Args:
+        tokens (List[List[str]]): list of tokenized sentences to predict
+
+    Returns:
+        List[List[str]]: tags of the tokens
+    """
+
+    labels = []
+    model.eval()
+    for sentence in tokens:
+        inputs = torch.tensor([vocab[word.lower()] for word in sentence
+                              ]).unsqueeze(0).to(device)
+        outputs = model(inputs)  # pylint: disable=all
+        predictions = torch.argmax(outputs, dim=-1).flatten()
+        str_predictions = [
+            vocab.get_label(p.item())  # type: ignore
+            for p in predictions
+        ]
+        labels.append(str_predictions)
+    return labels
+
+
+def predict_char(model: nn.Module, vocab: dataset.Vocabulary,
+                 char_vocab: dataset.CharVocabulary, tokens: List[List[str]],
+                 device: torch.device) -> List[List[str]]:
+    """Predict a bunch of human-readable sentences
+
+    Args:
+        tokens (List[List[str]]): list of tokenized sentences to predict
+
+    Returns:
+        List[List[str]]: tags of the tokens
+    """
+
+    labels = []
+    model.eval()
+    for sentence in tokens:
+        inputs = torch.tensor([vocab[word.lower()] for word in sentence
+                              ]).unsqueeze(0).to(device)
+        chars: List[List[int]] = [
+            [char_vocab.get_char_id(c) for c in word] for word in sentence
+        ]
+        maxlen = max(len(w) for w in chars)
+        padded_chars: List[List[int]] = []
+        for word in chars:
+            padded_chars.append(word + [char_vocab.pad] * (maxlen - len(word)))
+        padded_chars = torch.tensor(padded_chars).unsqueeze(0).to(
+            device)  # type: ignore
+        outputs = model(inputs, padded_chars)  # pylint: disable=all
+        predictions = torch.argmax(outputs, dim=-1).flatten()
+        str_predictions = [
+            vocab.get_label(p.item())  # type: ignore
+            for p in predictions
+        ]
+        labels.append(str_predictions)
+    return labels
+
+
+# from evaluate.py
+def read_dataset(path: str) -> Tuple[List[List[str]], List[List[str]]]:
+
+    tokens_s = []
+    labels_s = []
+
+    tokens = []
+    labels = []
+
+    with open(path) as f:
+
+        for line in f:
+
+            line = line.strip()
+
+            if line.startswith("#\t"):
+                tokens = []
+                labels = []
+            elif line == "":
+                tokens_s.append(tokens)
+                labels_s.append(labels)
+            else:
+                token, label = line.split("\t")
+                tokens.append(token)
+                labels.append(label)
+
+    assert len(tokens_s) == len(labels_s)
+
+    return tokens_s, labels_s

@@ -44,7 +44,27 @@ class NerdTagger:
         if device is not None:
             self.device = device
 
-        if style == 'classic':
+        if style == 'char':
+            char_vocab = dataset.CharVocabulary(path=config.MODEL /
+                                                'vocab-char.pkl')
+            vocab = dataset.Vocabulary(path=config.MODEL / 'vocab-glove.pkl')
+            # pretrained_emb, vocab = pretrained.get_pretrained_embeddings()
+            model = lstm.NerModelChar(
+                n_classes=13,
+                embedding_dim=100,
+                char_embedding_dim=50,
+                char_vocab=char_vocab,
+                vocab_size=len(vocab),
+                padding_idx=vocab.pad,
+                hidden_size=100,
+                char_hidden_size=50,
+                bidirectional=True,
+            ).to(self.device)
+            model.load_state_dict(
+                torch.load(config.MODEL / '9981-charembedding.pth',
+                           map_location=self.device))
+
+        elif style == 'classic':
             print('Generating good old fashioned Bi-LSTM')
             self.lower = True
             self.vocab = dataset.Vocabulary(threshold=2,

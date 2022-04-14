@@ -53,20 +53,32 @@ class CharVocabulary:
         Implements a vocabulary for the characters
     """
 
-    def __init__(self, sentences: List[Tuple[List[str], List[str]]]):
-
-        chars = set()
-        for s in sentences:
-            for w in s[0]:
-                chars = chars | set(w)
+    def __init__(self,
+                 sentences: Optional[List[Tuple[List[str], List[str]]]] = None,
+                 path: Optional[Path] = None):
 
         self.unk_label: str = '<unk>'
         self.pad_label: str = '<pad>'
 
-        chars = chars | {self.pad_label, self.unk_label}
-        chars = sorted(list(chars))
+        if sentences is None and path is None:
+            raise ValueError('You have to provide either sentences '
+                             'or a path to load the vocabulary from')
 
-        self.itoc: List[str] = chars
+        # build vocabulary from sentences
+        if sentences is not None:
+            chars = set()
+            for s in sentences:
+                for w in s[0]:
+                    chars = chars | set(w)
+            chars = chars | {self.pad_label, self.unk_label}
+            chars = sorted(list(chars))
+
+            self.itoc: List[str] = chars
+
+        # load from file
+        elif path is not None:
+            self.itoc: List[str] = self.load_data(path)
+
         self.ctoi: Dict[str, int] = {c: i for i, c in enumerate(self.itoc)}
 
         self.unk: int = self.ctoi[self.unk_label]
@@ -87,6 +99,15 @@ class CharVocabulary:
         elif isinstance(idx, int):
             return self.get_char(idx)
         raise NotImplementedError()
+
+    def dump_data(self, path: Path):
+        with open(path, 'wb') as f:
+            pickle.dump(self.itoc, f)
+
+    def load_data(self, path: Path) -> List[str]:
+        with open(path, 'rb') as f:
+            itoc = pickle.load(f)
+        return itoc
 
 
 class Vocabulary:
