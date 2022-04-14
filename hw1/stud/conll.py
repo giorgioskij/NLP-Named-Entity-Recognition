@@ -32,8 +32,8 @@ def get_conll_dataloaders():
                                 is_conll=True,
                                 lower=True)
     # dataloaders
-    trainloader, devloader = dataset.get_dataloaders(trainset,
-                                                     devset,
+    trainloader, devloader = dataset.get_dataloaders(trainset=trainset,
+                                                     devset=devset,
                                                      batch_size_train=128,
                                                      batch_size_dev=1024)
 

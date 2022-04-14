@@ -102,7 +102,7 @@ class NerdTagger:
                                map_location=self.device))
             else:
                 self.model.load_state_dict(
-                    torch.load(config.MODEL / '6965-glove-100h.pth',
+                    torch.load(config.MODEL / '7385-glove-stacked-100h.pth',
                                map_location=self.device))
 
         elif self.style == 'stanza':

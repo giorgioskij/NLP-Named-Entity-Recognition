@@ -38,6 +38,102 @@ class TrainParams:
     save_path: pathlib.Path
 
 
+class NerModelChar(nn.Module):
+    """
+        An LSTM model to perform Named Entity Classification which uses
+        character embedding as well as word embeddings
+    """
+
+    def __init__(self,
+                 n_classes: int,
+                 embedding_dim: int,
+                 char_embedding_dim: int,
+                 char_vocab: dataset.CharVocabulary,
+                 vocab_size: int,
+                 padding_idx: int,
+                 hidden_size: int,
+                 char_hidden_size: int,
+                 bidirectional: bool = False,
+                 pretrained_emb: Optional[torch.Tensor] = None,
+                 freeze_weights: bool = False,
+                 use_pos: bool = False,
+                 double_linear: bool = False):
+        super().__init__()
+
+        self.use_pos = use_pos
+        self.double_linear = double_linear
+
+        # word embedding
+        if pretrained_emb is not None:
+            self.embedding = nn.Embedding.from_pretrained(
+                embeddings=pretrained_emb,
+                freeze=freeze_weights,
+                padding_idx=padding_idx,
+            )
+        else:
+            self.embedding = nn.Embedding(
+                num_embeddings=vocab_size,
+                embedding_dim=embedding_dim,
+                padding_idx=padding_idx,
+            )
+            if freeze_weights:
+                self.embedding.requires_grad_(False)
+
+        # character embedding
+        self.char_vocab: dataset.CharVocabulary = char_vocab
+        self.char_embedding = nn.Embedding(len(self.char_vocab),
+                                           char_embedding_dim)
+
+        #
+        self.char_lstm = nn.LSTM(input_size=char_embedding_dim,
+                                 hidden_size=char_hidden_size,
+                                 batch_first=True,
+                                 bidirectional=False)
+
+        # main lstm module
+        self.lstm = nn.LSTM(input_size=embedding_dim + char_hidden_size,
+                            hidden_size=hidden_size,
+                            batch_first=True,
+                            bidirectional=bidirectional,
+                            num_layers=2,
+                            dropout=0.5)
+
+        self.linear = nn.Linear(in_features=hidden_size *
+                                2 if bidirectional else hidden_size,
+                                out_features=n_classes)
+
+        self.dropout = nn.Dropout()
+
+    def forward(self, x, chars):
+
+        batch_size = x.shape[0]
+        window_size = x.shape[1]
+        # get char embeddings
+        char_embeddings = self.char_embedding(chars)
+        char_embeddings = char_embeddings.flatten(start_dim=0, end_dim=1)
+        char_lstm_out, (char_lstm_hidden,
+                        char_lstm_cell) = self.char_lstm(char_embeddings)
+        # char_lstm_out = char_lstm_out.reshape(batch_size, window_size,
+        #                                       char_lstm_out.shape[1],
+        #                                       char_lstm_out.shape[2])
+
+        char_out = char_lstm_hidden.reshape(batch_size, window_size,
+                                            char_lstm_hidden.shape[2])
+
+        # get word embeddings
+        embeddings = self.embedding(x)
+
+        # concatenate word embeddings and char embeddings
+        concatenated = torch.cat((embeddings, char_out), dim=2)
+
+        lstm_out, _ = self.lstm(concatenated)
+        lstm_out = self.dropout(lstm_out)
+
+        clf_out = self.linear(lstm_out)
+
+        return clf_out
+
+
 class NerModel(nn.Module):
     """An LSTM model to perform NEC
     """
@@ -78,7 +174,9 @@ class NerModel(nn.Module):
             17,
             hidden_size=hidden_size,
             batch_first=True,
-            bidirectional=bidirectional)
+            bidirectional=bidirectional,
+            num_layers=2,
+            dropout=0.5)
 
         if self.double_linear:
             self.linear1 = nn.Linear(in_features=hidden_size *
@@ -91,6 +189,15 @@ class NerModel(nn.Module):
             self.linear = nn.Linear(in_features=hidden_size *
                                     2 if bidirectional else hidden_size,
                                     out_features=n_classes)
+
+        # extra stuff
+        # self.lstm2 = nn.LSTM(input_size=n_classes,
+        #                      hidden_size=50,
+        #                      batch_first=True,
+        #                      bidirectional=bidirectional,
+        #                      dropout=0.5)
+
+        # self.clf = nn.Linear(in_features=100, out_features=n_classes)
 
         self.dropout = nn.Dropout()
 
@@ -114,6 +221,10 @@ class NerModel(nn.Module):
             clf_out = self.linear2(clf_out)
         else:
             clf_out = self.linear(lstm_out)
+
+        # extra stuff
+        # lstm2_out, _ = self.lstm2(torch.relu(clf_out))
+        # clf_out = self.clf(lstm2_out)
 
         return clf_out
 
@@ -255,10 +366,12 @@ def run_epoch(model: NerModel,
                           data[1].to(params.device).flatten())
 
         postags = data[2].to(params.device) if model.use_pos else None
+        chars = (data[2].to(params.device)
+                 if isinstance(model, NerModelChar) else None)
 
         # forward and backward pass
         loss, outputs = step(model, params.loss_fn, inputs, labels, postags,
-                             params.optimizer if not evaluate else None)
+                             chars, params.optimizer if not evaluate else None)
 
         # evaluate predictions
         predictions = torch.argmax(outputs, dim=1)
@@ -406,10 +519,13 @@ def step(model: NerModel,
          inputs: torch.Tensor,
          labels: torch.Tensor,
          postags: Optional[torch.Tensor],
+         chars: Optional[torch.Tensor],
          optimizer: Optional[torch.optim.Optimizer] = None):
 
     if postags is not None:
         outputs = model(inputs, postags)
+    elif chars is not None:
+        outputs = model(inputs, chars)
     else:
         outputs = model(inputs)
     outputs = outputs.view(-1, outputs.shape[-1])

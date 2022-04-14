@@ -1,0 +1,7 @@
+2022-04-14T16:30:32.608587670Z building model
+2022-04-14T16:30:32.608615260Z Generating Bi-LSTM with glove embeddings
+2022-04-14T16:30:32.608617825Z  * Serving Flask app 'app' (lazy loading)
+2022-04-14T16:30:32.608619537Z  * Environment: production
+2022-04-14T16:30:32.608621095Z    WARNING: This is a development server. Do not use it in a production deployment.
+2022-04-14T16:30:32.608622672Z    Use a production WSGI server instead.
+2022-04-14T16:30:32.608624386Z  * Debug mode: off

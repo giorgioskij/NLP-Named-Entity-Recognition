@@ -146,11 +146,29 @@ def build_pretrained_embeddings(save_stuff: bool = False,
         use_pos=use_pos)
 
     if save_stuff:
-        print('Saving the model')
-        torch.save(model.state_dict(), config.MODEL / 'emb-200-double-pos.pth')
-        # print('Saving the vocab')
-        # vocab.dump_data(config.MODEL / 'glove-vocab.pkl')
+        # print('Saving the model')
+        # torch.save(model.state_dict(), config.MODEL / '.pth')
+        print('Saving the vocab')
+        vocab.dump_data(config.MODEL / 'glove-vocab.pkl')
     return model, vocab
+
+
+def get_pretrained_embeddings():
+    print('Loading pretrained glove embeddings')
+    embeddings: KeyedVectors = gensim.downloader.load(
+        'glove-wiki-gigaword-100')  # type: ignore
+
+    # use only pretrained
+    vectors: np.ndarray = embeddings.vectors  # type: ignore
+    pad_vector = np.random.rand(1, vectors.shape[1])
+    unk_vector = np.mean(vectors, axis=0, keepdims=True)
+    vectors = np.concatenate((pad_vector, unk_vector, vectors))
+    vectors = torch.FloatTensor(vectors)  # type: ignore
+    print(f'{vectors.shape=}')
+
+    vocab = dataset.Vocabulary(premade=embeddings.index_to_key)
+
+    return vectors, vocab
 
 
 def fine_tune(vocab: dataset.Vocabulary, model: lstm.NerModel):

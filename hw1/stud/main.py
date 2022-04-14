@@ -3,6 +3,8 @@
 #%% imports
 import os
 
+from numpy import double
+
 os.environ['CUBLAS_WORKSPACE_CONFIG'] = ':4096:8'
 from curses import window
 from pathlib import Path
@@ -31,40 +33,44 @@ device = config.DEVICE
 
 #%% load and test
 
-# vocab
-print('Loading data...')
-vocab = dataset.Vocabulary(path=config.MODEL / 'vocab-glove.pkl')
+pretrained_emb, vocab = pretrained.get_pretrained_embeddings()
 
-# dataset
-trainloader, devloader = dataset.get_dataloaders(vocab,
-                                                 use_pos=True,
-                                                 window_size=50)
+trainset = dataset.NerDatasetChar()
+devset = dataset.NerDatasetChar(vocab=trainset.vocab,
+                                char_vocab=trainset.char_vocab)
 
-# model
-model = lstm.NerModel(n_classes=13,
-                      embedding_dim=100,
-                      vocab_size=len(vocab),
-                      padding_idx=vocab.pad_label_id,
-                      hidden_size=200,
-                      bidirectional=True,
-                      double_linear=True,
-                      use_pos=True).to(config.DEVICE)
+trainloader, devloader = dataset.get_dataloaders(trainset=trainset,
+                                                 devset=devset,
+                                                 batch_size_train=64)
+
+# trainloader, devloader = dataset.get_dataloaders(use_pos=False,
+#                                                  vocab=vocab,
+#                                                  window_size=100,
+#                                                  batch_size_train=64)
+
+model = lstm.NerModelChar(n_classes=13,
+                          embedding_dim=100,
+                          char_embedding_dim=50,
+                          char_vocab=trainset.char_vocab,
+                          vocab_size=len(vocab),
+                          padding_idx=vocab.pad,
+                          hidden_size=100,
+                          char_hidden_size=50,
+                          bidirectional=True,
+                          pretrained_emb=pretrained_emb).to(config.DEVICE)
+
 params = hypers.get_default_params(model, vocab)
 
 #%%
 # test
-model.load_state_dict(
-    torch.load(config.MODEL / '6910-glove-200-double-pos.pth',
-               map_location=config.DEVICE))
-lstm.test(model, devloader, params, logic=False)
-
-model.load_state_dict(
-    torch.load(config.MODEL / '6910-glove-200-double-pos.pth',
-               map_location=config.DEVICE))
-lstm.test(model, devloader, params, logic=True)
+# model.load_state_dict(
+#     torch.load(config.MODEL / '6965-glove-100h.pth',
+#                map_location=config.DEVICE))
+# lstm.test(model, devloader, params, logic=False)
 
 # train
 # model.load_state_dict(
-#     torch.load(config.MODEL / 'emb-200-double-pos.pth',
-#                map_location=config.DEVICE))
-# lstm.train(model, trainloader, devloader, params)
+#     torch.load(config.MODEL / 'emb-100.pth', map_location=config.DEVICE))
+
+print(f'training model: {model}')
+lstm.train(model, trainloader, devloader, params)

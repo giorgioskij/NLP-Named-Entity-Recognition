@@ -48,6 +48,47 @@ class PosVocabulary:
         raise NotImplementedError()
 
 
+class CharVocabulary:
+    """
+        Implements a vocabulary for the characters
+    """
+
+    def __init__(self, sentences: List[Tuple[List[str], List[str]]]):
+
+        chars = set()
+        for s in sentences:
+            for w in s[0]:
+                chars = chars | set(w)
+
+        self.unk_label: str = '<unk>'
+        self.pad_label: str = '<pad>'
+
+        chars = chars | {self.pad_label, self.unk_label}
+        chars = sorted(list(chars))
+
+        self.itoc: List[str] = chars
+        self.ctoi: Dict[str, int] = {c: i for i, c in enumerate(self.itoc)}
+
+        self.unk: int = self.ctoi[self.unk_label]
+        self.pad: int = self.ctoi[self.pad_label]
+
+    def __len__(self):
+        return len(self.itoc)
+
+    def get_char_id(self, char: str) -> int:
+        return self.ctoi[char] if char in self.ctoi else self.unk
+
+    def get_char(self, idx: int) -> str:
+        return self.itoc[idx]
+
+    def __getitem__(self, idx: Union[int, str]) -> Union[str, float]:
+        if isinstance(idx, str):
+            return self.get_char_id(idx)
+        elif isinstance(idx, int):
+            return self.get_char(idx)
+        raise NotImplementedError()
+
+
 class Vocabulary:
     """ Implements a vocabulary of both words and labels.
         Automatically adds '<unk>' and '<pad>' word types.
@@ -116,9 +157,9 @@ class Vocabulary:
                 for word, label in zip(sentence, labels):
                     self.counts[word] += 1
                     self.lcounts[label] += 1
-                    if label == 'id':
-                        print(f'{sentence=}')
-                        print(f'{labels=}')
+                    # if label == 'id':
+                    #     print(f'{sentence=}')
+                    #     print(f'{labels=}')
             self.itos = sorted(
                 list(
                     filter(lambda x: self.counts[x] >= threshold,
@@ -412,52 +453,80 @@ class NerDataset(torch.utils.data.Dataset):
         return self.windows[idx]
 
 
-def get_dataloaders(
-    vocab: Optional[Vocabulary] = None,
-    trainset: Optional[NerDataset] = None,
-    devset: Optional[NerDataset] = None,
-    use_pos: bool = False,
-    window_size: int = 100,
-    batch_size_train: int = 128,
-    batch_size_dev: int = 256
-) -> Tuple[torch.utils.data.DataLoader, torch.utils.data.DataLoader]:
-    """Return the dataloaders from the given datasets
-
-    Args:
-        trainset (NerDataset, optional): dataset for training
-        devset (NerDataset, optional): dataset for evaluation
-        batch_size (int, optional): Batch size. Defaults to 64.
-
-    Returns:
-        Tuple[Dataloader, Dataloader]: the dataloaders
+class NerDatasetChar(NerDataset):
     """
-    if trainset is None or devset is None:
-        trainset, devset = get_datasets(vocab,
-                                        use_pos=use_pos,
-                                        window_size=window_size)
-    return (
-        torch.utils.data.DataLoader(trainset,
-                                    batch_size=batch_size_train,
-                                    shuffle=True),
-        torch.utils.data.DataLoader(devset, batch_size=batch_size_dev),
-    )
+    Extends a NerDatasets, but returns the characters for each word as well
+    """
 
+    def __init__(
+        self,
+        path: Path = config.TRAIN,
+        vocab: Optional[Vocabulary] = None,
+        char_vocab: Optional[CharVocabulary] = None,
+        threshold: int = 2,
+        window_size: int = 100,
+        window_shift: Optional[int] = None,
+    ):
 
-def get_datasets(vocab: Optional[Vocabulary] = None,
-                 use_pos: bool = False,
-                 window_size: int = 100):
-    if use_pos:
-        trainset: NerDataset = NerDatasetPos(config.TRAIN,
-                                             vocab=vocab,
-                                             window_size=window_size)
-        devset: NerDataset = NerDatasetPos(config.DEV,
-                                           vocab=trainset.vocab,
-                                           window_size=window_size)
-        return trainset, devset
+        if char_vocab is None and 'train' not in str(path):
+            raise ValueError(
+                'Careful, you are trying to build a character vocabulary'
+                'on something that is not the training data')
+        self.indexed_data: List[Tuple[List[int], List[int], List[List[int]]]]
+        self.max_word_len: int
 
-    trainset: NerDataset = NerDataset(config.TRAIN, vocab=vocab)
-    devset: NerDataset = NerDataset(config.DEV, vocab=trainset.vocab)
-    return trainset, devset
+        self.char_vocab: Optional[CharVocabulary] = char_vocab
+        super().__init__(path, vocab, threshold, window_size, window_shift)
+
+    def index_data(self) -> List[Tuple[List[int], List[int], List[List[int]]]]:
+        self.char_vocab: CharVocabulary = CharVocabulary(
+            self.sentences) if self.char_vocab is None else self.char_vocab
+        data = list(
+            map(
+                lambda sentence:
+                ([self.vocab.get_word_id(w) for w in sentence[0]], [
+                    self.vocab.get_label_id(l) for l in sentence[1]
+                ], [[self.char_vocab.get_char_id(c)
+                     for c in word]
+                    for word in sentence[0]]), self.sentences))
+        return data
+
+    def pad_char_sequence(self, chars: List[int], total: int):
+        return chars + [self.char_vocab.pad] * (total - len(chars))
+
+    def build_windows(
+            self) -> List[Tuple[torch.Tensor, torch.Tensor, torch.Tensor]]:
+        windows: List[Tuple[torch.Tensor, torch.Tensor, torch.Tensor]] = []
+        self.max_word_len = max(len(w[0]) for w in self.sentences)
+        for word_ids, label_ids, word_chars in self.indexed_data:
+            start = 0
+            while start < len(word_ids):
+                # generate window
+                word_window = word_ids[start:start + self.window_size]
+                label_window = label_ids[start:start + self.window_size]
+                chars_window = [
+                    self.pad_char_sequence(chars, total=self.max_word_len)
+                    for chars in word_chars[start:start + self.window_size]
+                ]
+                # pad
+                word_window += ([self.vocab.pad] *
+                                (self.window_size - len(word_window)))
+                label_window += (
+                    [self.vocab.get_label_id(self.vocab.pad_label)] *
+                    (self.window_size - len(label_window)))
+                chars_window += (
+                    [self.pad_char_sequence([], self.max_word_len)] *
+                    (self.window_size - len(chars_window)))
+                # append
+                windows.append(
+                    (torch.tensor(word_window), torch.tensor(label_window),
+                     torch.tensor(chars_window)))
+                start += self.window_shift
+        return windows
+
+    def human(self, idx: int):
+        return (' '.join(self.sentences[idx][0]),
+                ' '.join(self.sentences[idx][1]))
 
 
 class NerDatasetPos(NerDataset):
@@ -565,3 +634,51 @@ class NerDatasetPos(NerDataset):
         return (' '.join(self.sentences[idx][0]),
                 ' '.join(self.sentences[idx][1]),
                 ' '.join(self.sentences[idx][2]))
+
+
+def get_dataloaders(
+    vocab: Optional[Vocabulary] = None,
+    trainset: Optional[NerDataset] = None,
+    devset: Optional[NerDataset] = None,
+    use_pos: bool = False,
+    window_size: int = 100,
+    batch_size_train: int = 128,
+    batch_size_dev: int = 256
+) -> Tuple[torch.utils.data.DataLoader, torch.utils.data.DataLoader]:
+    """Return the dataloaders from the given datasets
+
+    Args:
+        trainset (NerDataset, optional): dataset for training
+        devset (NerDataset, optional): dataset for evaluation
+        batch_size (int, optional): Batch size. Defaults to 64.
+
+    Returns:
+        Tuple[Dataloader, Dataloader]: the dataloaders
+    """
+    if trainset is None or devset is None:
+        trainset, devset = get_datasets(vocab,
+                                        use_pos=use_pos,
+                                        window_size=window_size)
+    return (
+        torch.utils.data.DataLoader(trainset,
+                                    batch_size=batch_size_train,
+                                    shuffle=True),
+        torch.utils.data.DataLoader(devset, batch_size=batch_size_dev),
+    )
+
+
+def get_datasets(vocab: Optional[Vocabulary] = None,
+                 use_pos: bool = False,
+                 window_size: int = 100):
+    if use_pos:
+        trainset: NerDataset = NerDatasetPos(config.TRAIN,
+                                             vocab=vocab,
+                                             window_size=window_size)
+        devset: NerDataset = NerDatasetPos(config.DEV,
+                                           vocab=trainset.vocab,
+                                           window_size=window_size)
+        return trainset, devset
+
+    trainset: NerDataset = NerDataset(config.TRAIN, vocab=vocab)
+    devset: NerDataset = NerDataset(config.DEV, vocab=trainset.vocab)
+    return trainset, devset
