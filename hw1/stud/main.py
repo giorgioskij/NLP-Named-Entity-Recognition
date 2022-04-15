@@ -63,7 +63,7 @@ model = lstm.NerModelChar(n_classes=13,
                           hidden_size=100,
                           char_hidden_size=50,
                           bidirectional=True,
-                          pretrained_emb=None).to(config.DEVICE)
+                          pretrained_emb=pretrained_emb).to(config.DEVICE)
 
 # without char embedding
 # model = lstm.NerModel(
