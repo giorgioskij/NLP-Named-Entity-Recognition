@@ -49,7 +49,10 @@ def get_conll_hypers(vocab):
 
 
 def get_default_params(model: lstm.NerModel, vocab: dataset.Vocabulary):
-    optimizer = torch.optim.SGD(model.parameters(), lr=0.001, momentum=0.9)
+    optimizer = torch.optim.SGD(model.parameters(),
+                                lr=0.001,
+                                momentum=0.9,
+                                weight_decay=1e-6)
     loss_fn = nn.CrossEntropyLoss(ignore_index=vocab.pad_label_id,
                                   reduction='sum')
     params: lstm.TrainParams = lstm.TrainParams(optimizer=optimizer,

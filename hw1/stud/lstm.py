@@ -88,10 +88,12 @@ class NerModelChar(nn.Module):
         self.char_lstm = nn.LSTM(input_size=char_embedding_dim,
                                  hidden_size=char_hidden_size,
                                  batch_first=True,
-                                 bidirectional=False)
+                                 bidirectional=False,
+                                 num_layers=2,
+                                 dropout=0.5)
 
         # main lstm module
-        self.lstm = nn.LSTM(input_size=embedding_dim + char_hidden_size,
+        self.lstm = nn.LSTM(input_size=embedding_dim + char_hidden_size * 2,
                             hidden_size=hidden_size,
                             batch_first=True,
                             bidirectional=bidirectional,
@@ -118,7 +120,8 @@ class NerModelChar(nn.Module):
         #                                       char_lstm_out.shape[2])
 
         char_out = char_lstm_hidden.reshape(batch_size, window_size,
-                                            char_lstm_hidden.shape[2])
+                                            char_lstm_hidden.shape[2] * 2)
+        char_out = self.dropout(char_out)
 
         # get word embeddings
         embeddings = self.embedding(x)

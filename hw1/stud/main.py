@@ -44,7 +44,7 @@ devset = dataset.NerDatasetChar(path=config.DEV,
 
 trainloader, devloader = dataset.get_dataloaders(trainset=trainset,
                                                  devset=devset,
-                                                 batch_size_train=64)
+                                                 batch_size_train=128)
 
 # trainloader, devloader = dataset.get_dataloaders(use_pos=False,
 #                                                  vocab=vocab,
@@ -60,7 +60,7 @@ model = lstm.NerModelChar(n_classes=13,
                           hidden_size=100,
                           char_hidden_size=50,
                           bidirectional=True,
-                          pretrained_emb=None).to(config.DEVICE)
+                          pretrained_emb=pretrained_emb).to(config.DEVICE)
 
 params = hypers.get_default_params(model, vocab)
 
