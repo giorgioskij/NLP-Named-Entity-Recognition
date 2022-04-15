@@ -12,6 +12,7 @@ import sys
 import torch
 from torch import nn
 from torch.utils.data import DataLoader
+import pickle
 
 sys.path.append(str(Path(__file__).parent.parent))
 
@@ -33,7 +34,10 @@ device = config.DEVICE
 
 #%% load and test
 
-pretrained_emb, vocab_glove = pretrained.get_pretrained_embeddings()
+# pretrained_emb, vocab_glove = pretrained.get_pretrained_embeddings()
+with open(config.MODEL / 'glove-emb-vocab.pkl', 'rb') as f:
+    pretrained_emb, vocab_glove = pickle.load(f)
+
 vocab = vocab_glove
 
 # vocab = dataset.Vocabulary(path=config.MODEL / 'vocab.pkl')
@@ -56,12 +60,13 @@ trainloader, devloader = dataset.get_dataloaders(trainset=trainset,
 # with char embedding
 model = lstm.NerModelChar(n_classes=13,
                           embedding_dim=100,
-                          char_embedding_dim=50,
+                          char_embedding_dim=25,
                           char_vocab=trainset.char_vocab,
                           vocab_size=len(vocab),
                           padding_idx=vocab.pad,
                           hidden_size=100,
-                          char_hidden_size=50,
+                          char_out_channels=25,
+                          char_hidden_size=25,
                           bidirectional=True,
                           pretrained_emb=pretrained_emb).to(config.DEVICE)
 

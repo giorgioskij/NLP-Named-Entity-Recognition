@@ -53,6 +53,7 @@ class NerModelChar(nn.Module):
                  padding_idx: int,
                  hidden_size: int,
                  char_hidden_size: int,
+                 char_out_channels: int,
                  bidirectional: bool = False,
                  pretrained_emb: Optional[torch.Tensor] = None,
                  freeze_weights: bool = False,
@@ -62,6 +63,7 @@ class NerModelChar(nn.Module):
 
         self.use_pos = use_pos
         self.double_linear = double_linear
+        self.char_out_channels = char_out_channels
 
         # word embedding
         if pretrained_emb is not None:
@@ -84,7 +86,13 @@ class NerModelChar(nn.Module):
         self.char_embedding = nn.Embedding(len(self.char_vocab),
                                            char_embedding_dim)
 
-        #
+        # cnn for characters
+        self.char_cnn = nn.Conv2d(in_channels=1,
+                                  out_channels=self.char_out_channels,
+                                  kernel_size=(3, char_embedding_dim),
+                                  padding=(2, 0))
+
+        # lstm for characters
         self.char_lstm = nn.LSTM(input_size=char_embedding_dim,
                                  hidden_size=char_hidden_size,
                                  batch_first=True,
@@ -93,7 +101,7 @@ class NerModelChar(nn.Module):
                                  dropout=0.5)
 
         # main lstm module
-        self.lstm = nn.LSTM(input_size=embedding_dim + char_hidden_size * 2,
+        self.lstm = nn.LSTM(input_size=embedding_dim + self.char_out_channels,
                             hidden_size=hidden_size,
                             batch_first=True,
                             bidirectional=bidirectional,
@@ -117,24 +125,39 @@ class NerModelChar(nn.Module):
 
         # get char embeddings: [batch, window, n_chars, char_emb]
         char_embeddings = self.char_embedding(chars)
+
         # flatten: [batch * window, chars, char_emb]
         char_embeddings = char_embeddings.flatten(start_dim=0, end_dim=1)
 
-        # char_lstm_out: [batch * window, n_chars, char_hidden]
-        # char_lstm_hidden: [2, batch * window, char_hidden]
-        # char_lsmt_cell: [2, batch * window, char_hidden]
-        char_lstm_out, (char_lstm_hidden,
-                        char_lstm_cell) = self.char_lstm(char_embeddings)
+        if False:
 
-        # # char_lstm_hidden: [batch * window, 2, char_hidden]
-        # char_lstm_hidden = char_lstm_hidden.transpose(0, 1)
-        # # char_out: [batch, window, 2 * char_hidden]
-        # char_out = char_lstm_hidden.reshape(batch_size, window_size,
-        #                                     char_lstm_hidden.shape[2] * 2)
+            # char_lstm_out: [batch * window, n_chars, char_hidden]
+            # char_lstm_hidden: [2, batch * window, char_hidden]
+            # char_lsmt_cell: [2, batch * window, char_hidden]
+            char_lstm_out, (char_lstm_hidden,
+                            char_lstm_cell) = self.char_lstm(char_embeddings)
 
-        # take only the last timestep: [batch * window, char_hidden]
-        char_out = char_lstm_out[:, -1, :].reshape(batch_size, window_size,
-                                                   char_lstm_out.shape[2])
+            # # char_lstm_hidden: [batch * window, 2, char_hidden]
+            # char_lstm_hidden = char_lstm_hidden.transpose(0, 1)
+            # # char_out: [batch, window, 2 * char_hidden]
+            # char_out = char_lstm_hidden.reshape(batch_size, window_size,
+            #                                     char_lstm_hidden.shape[2] * 2)
+
+            # take only the last timestep: [batch * window, char_hidden]
+            char_out = char_lstm_out[:, -1, :].reshape(batch_size, window_size,
+                                                       char_lstm_out.shape[2])
+
+        char_embeddings = char_embeddings.unsqueeze(1)
+
+        # convolution and maxpool
+        chars_cnn_out = self.char_cnn(char_embeddings)
+        char_out = functional.max_pool2d(
+            chars_cnn_out, kernel_size=(chars_cnn_out.shape[2],
+                                        1)).view(chars_cnn_out.shape[0],
+                                                 self.char_out_channels)
+
+        # reshape to divide batch and word
+        char_out = char_out.reshape(batch_size, window_size, char_out.shape[1])
 
         # get word embeddings: [batch, window, word_hidden]
         embeddings = self.embedding(x)
