@@ -38,6 +38,7 @@ device = config.DEVICE
 
 # vocab = dataset.Vocabulary(path=config.MODEL / 'vocab.pkl')
 trainset = dataset.NerDatasetChar()
+vocab = trainset.vocab
 devset = dataset.NerDatasetChar(path=config.DEV,
                                 vocab=vocab,
                                 char_vocab=trainset.char_vocab)
