@@ -102,7 +102,10 @@ class NerModelChar(nn.Module):
 
         self.linear = nn.Linear(in_features=hidden_size *
                                 2 if bidirectional else hidden_size,
-                                out_features=n_classes)
+                                out_features=hidden_size * 2)
+
+        self.linear2 = nn.Linear(in_features=hidden_size * 2,
+                                 out_features=n_classes)
 
         self.dropout = nn.Dropout()
 
@@ -147,6 +150,9 @@ class NerModelChar(nn.Module):
 
         # classifier: [batch, window, n_classes]
         clf_out = self.linear(lstm_out)
+        clf_out = self.dropout(torch.relu(clf_out))
+
+        clf_out = self.linear(clf_out)
 
         return clf_out
 

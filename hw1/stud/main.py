@@ -33,15 +33,16 @@ device = config.DEVICE
 
 #%% load and test
 
-# pretrained_emb, vocab_glove = pretrained.get_pretrained_embeddings()
-# vocab = vocab_glove
+pretrained_emb, vocab_glove = pretrained.get_pretrained_embeddings()
+vocab = vocab_glove
 
 # vocab = dataset.Vocabulary(path=config.MODEL / 'vocab.pkl')
-trainset = dataset.NerDatasetChar()
-vocab = trainset.vocab
+trainset = dataset.NerDatasetChar(vocab=vocab, window_size=50)
+# vocab = trainset.vocab
 devset = dataset.NerDatasetChar(path=config.DEV,
                                 vocab=vocab,
-                                char_vocab=trainset.char_vocab)
+                                char_vocab=trainset.char_vocab,
+                                window_size=50)
 
 trainloader, devloader = dataset.get_dataloaders(trainset=trainset,
                                                  devset=devset,
