@@ -158,6 +158,7 @@ class NerModelChar(nn.Module):
 
         # reshape to divide batch and word
         char_out = char_out.reshape(batch_size, window_size, char_out.shape[1])
+        char_out = self.dropout(char_out)
 
         # get word embeddings: [batch, window, word_hidden]
         embeddings = self.embedding(x)
@@ -172,9 +173,9 @@ class NerModelChar(nn.Module):
         lstm_out = self.dropout(lstm_out)
 
         # classifier: [batch, window, n_classes]
-        clf_out = self.linear(lstm_out)
-        clf_out = self.dropout(torch.relu(clf_out))
-        clf_out = self.linear2(clf_out)
+        # clf_out = self.linear(lstm_out)
+        # clf_out = self.dropout(torch.relu(clf_out))
+        clf_out = self.linear2(lstm_out)
         return clf_out
 
 
