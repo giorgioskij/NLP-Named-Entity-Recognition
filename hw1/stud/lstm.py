@@ -151,7 +151,7 @@ class NerModelChar(nn.Module):
         # classifier: [batch, window, n_classes]
         clf_out = self.linear(lstm_out)
         clf_out = self.dropout(torch.relu(clf_out))
-        clf_out = self.linear(clf_out)
+        clf_out = self.linear2(clf_out)
         return clf_out
 
 
