@@ -88,12 +88,12 @@ class NerModelChar(nn.Module):
         self.char_lstm = nn.LSTM(input_size=char_embedding_dim,
                                  hidden_size=char_hidden_size,
                                  batch_first=True,
-                                 bidirectional=False,
+                                 bidirectional=True,
                                  num_layers=2,
                                  dropout=0.5)
 
         # main lstm module
-        self.lstm = nn.LSTM(input_size=embedding_dim + char_hidden_size,
+        self.lstm = nn.LSTM(input_size=embedding_dim + char_hidden_size * 2,
                             hidden_size=hidden_size,
                             batch_first=True,
                             bidirectional=bidirectional,
