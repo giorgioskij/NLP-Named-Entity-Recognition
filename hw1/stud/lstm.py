@@ -124,11 +124,11 @@ class NerModelChar(nn.Module):
                         char_lstm_cell) = self.char_lstm(char_embeddings)
 
         # char_lstm_hidden: [batch * window, 2, char_hidden]
-        char_lstm_cell = char_lstm_cell.transpose(0, 1)
+        char_lstm_hidden = char_lstm_hidden.transpose(0, 1)
 
         # char_out: [batch, window, 2 * char_hidden]
-        char_out = char_lstm_cell.reshape(batch_size, window_size,
-                                          char_lstm_hidden.shape[2] * 2)
+        char_out = char_lstm_hidden.reshape(batch_size, window_size,
+                                            char_lstm_hidden.shape[2] * 2)
 
         # get word embeddings: [batch, window, word_hidden]
         embeddings = self.embedding(x)
