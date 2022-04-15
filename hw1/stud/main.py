@@ -33,11 +33,11 @@ device = config.DEVICE
 
 #%% load and test
 
-pretrained_emb, vocab_glove = pretrained.get_pretrained_embeddings()
-vocab = vocab_glove
+# pretrained_emb, vocab_glove = pretrained.get_pretrained_embeddings()
+# vocab = vocab_glove
 
 # vocab = dataset.Vocabulary(path=config.MODEL / 'vocab.pkl')
-trainset = dataset.NerDatasetChar(vocab=vocab)
+trainset = dataset.NerDatasetChar()
 devset = dataset.NerDatasetChar(path=config.DEV,
                                 vocab=vocab,
                                 char_vocab=trainset.char_vocab)
@@ -61,7 +61,7 @@ model = lstm.NerModelChar(n_classes=13,
                           hidden_size=100,
                           char_hidden_size=50,
                           bidirectional=True,
-                          pretrained_emb=pretrained_emb).to(config.DEVICE)
+                          pretrained_emb=None).to(config.DEVICE)
 
 # without char embedding
 # model = lstm.NerModel(
