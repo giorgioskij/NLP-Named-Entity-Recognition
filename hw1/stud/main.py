@@ -42,7 +42,7 @@ trainset = dataset.NerDatasetChar(vocab=vocab, window_size=50)
 devset = dataset.NerDatasetChar(path=config.DEV,
                                 vocab=vocab,
                                 char_vocab=trainset.char_vocab,
-                                window_size=50)
+                                window_size=100)
 
 trainloader, devloader = dataset.get_dataloaders(trainset=trainset,
                                                  devset=devset,
