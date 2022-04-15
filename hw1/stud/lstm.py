@@ -89,7 +89,8 @@ class NerModelChar(nn.Module):
                                  hidden_size=char_hidden_size,
                                  batch_first=True,
                                  bidirectional=False,
-                                 num_layers=1)
+                                 num_layers=2,
+                                 dropout=0.5)
 
         # main lstm module
         self.lstm = nn.LSTM(input_size=embedding_dim + char_hidden_size,
@@ -140,6 +141,9 @@ class NerModelChar(nn.Module):
 
         # main lstm: [batch, window, 2 * (word_hidden + char_hidden)]
         lstm_out, _ = self.lstm(concatenated)
+
+        # add dropout
+        lstm_out = self.dropout(lstm_out)
 
         # classifier: [batch, window, n_classes]
         clf_out = self.linear(lstm_out)
