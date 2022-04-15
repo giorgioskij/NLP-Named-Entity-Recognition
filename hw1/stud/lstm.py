@@ -107,31 +107,39 @@ class NerModelChar(nn.Module):
         self.dropout = nn.Dropout()
 
     def forward(self, x, chars):
-
+        # x shape: [batch, window]
+        # chars shape: [batch, window, n_chars]
         batch_size = x.shape[0]
         window_size = x.shape[1]
-        # get char embeddings
+
+        # get char embeddings: [batch, window, n_chars, char_emb]
         char_embeddings = self.char_embedding(chars)
+        # flatten: [batch * window, chars, char_emb]
         char_embeddings = char_embeddings.flatten(start_dim=0, end_dim=1)
+
+        # char_lstm_out: [batch * window, n_chars, char_hidden]
+        # char_lstm_hidden: [2, batch * window, char_hidden]
+        # char_lsmt_cell: [2, batch * window, char_hidden]
         char_lstm_out, (char_lstm_hidden,
                         char_lstm_cell) = self.char_lstm(char_embeddings)
-        # char_lstm_out = char_lstm_out.reshape(batch_size, window_size,
-        #                                       char_lstm_out.shape[1],
-        #                                       char_lstm_out.shape[2])
 
+        # char_lstm_hidden: [batch * window, 2, char_hidden]
+        char_lstm_hidden = char_lstm_hidden.transpose(0, 1)
+
+        # char_out: [batch, window, 2 * char_hidden]
         char_out = char_lstm_hidden.reshape(batch_size, window_size,
                                             char_lstm_hidden.shape[2] * 2)
-        char_out = self.dropout(char_out)
 
-        # get word embeddings
+        # get word embeddings: [batch, window, word_hidden]
         embeddings = self.embedding(x)
 
-        # concatenate word embeddings and char embeddings
+        # cat word and char embeddings: [batch, window, word_hidden+char_hidden]
         concatenated = torch.cat((embeddings, char_out), dim=2)
 
+        # main lstm: [batch, window, 2 * (word_hidden + char_hidden)]
         lstm_out, _ = self.lstm(concatenated)
-        lstm_out = self.dropout(lstm_out)
 
+        # classifier: [batch, window, n_classes]
         clf_out = self.linear(lstm_out)
 
         return clf_out
