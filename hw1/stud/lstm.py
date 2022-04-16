@@ -466,10 +466,11 @@ def run_epoch(model: NerModel,
 
         else:
             predictions = torch.argmax(outputs, dim=1)
+            print('why am i here')
+            real_predictions = predictions[labels != params.vocab.pad_label_id]
 
         if evaluate and logic:
             predictions = apply_logic(predictions)
-            real_predictions = predictions[labels != params.vocab.pad_label_id]
 
         # exclude padding from stats
         real_labels = labels[labels != params.vocab.pad_label_id]
