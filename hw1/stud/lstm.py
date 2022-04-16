@@ -84,7 +84,8 @@ class NerModelChar(nn.Module):
         # character embedding
         self.char_vocab: dataset.CharVocabulary = char_vocab
         self.char_embedding = nn.Embedding(len(self.char_vocab),
-                                           char_embedding_dim)
+                                           char_embedding_dim,
+                                           padding_idx=self.char_vocab.pad)
 
         # cnn for characters
         self.char_cnn = nn.Conv2d(in_channels=1,
