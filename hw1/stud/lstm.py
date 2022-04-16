@@ -460,7 +460,7 @@ def run_epoch(model: NerModel,
             # evaluate predictions
             predictions = crf.decode(outputs, mask)
             real_predictions = torch.LongTensor(
-                [p for s in predictions for p in s])
+                [p for s in predictions for p in s]).to(params.device)
 
         else:
             predictions = torch.argmax(outputs, dim=1)
