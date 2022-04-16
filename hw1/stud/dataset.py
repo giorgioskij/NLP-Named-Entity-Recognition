@@ -55,7 +55,8 @@ class CharVocabulary:
 
     def __init__(self,
                  sentences: Optional[List[Tuple[List[str], List[str]]]] = None,
-                 path: Optional[Path] = None):
+                 path: Optional[Path] = None,
+                 threshold: int = 2):
 
         self.unk_label: str = '<unk>'
         self.pad_label: str = '<pad>'
@@ -66,14 +67,22 @@ class CharVocabulary:
 
         # build vocabulary from sentences
         if sentences is not None:
-            chars = set()
+            # chars = set()
+            chars = Counter()
             for s in sentences:
                 for w in s[0]:
-                    chars = chars | set(w)
-            chars = chars | {self.pad_label, self.unk_label}
-            chars = sorted(list(chars))
+                    for c in w:
+                        chars[c] += 1
+            #         chars = chars | set(w)
+            # chars = chars | {self.pad_label, self.unk_label}
+            # chars = sorted(list(chars))
+            self.ctos: List[str] = sorted(
+                list(
+                    filter(lambda x: chars[x] >= threshold,
+                           chars.keys())) +
+                [self.unk_label, self.pad_label])
 
-            self.itoc: List[str] = chars
+            # self.itoc: List[str] = chars
 
         # load from file
         elif path is not None:
