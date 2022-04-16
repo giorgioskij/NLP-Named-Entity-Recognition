@@ -169,7 +169,7 @@ class NerModelChar(nn.Module):
         lstm_out, _ = self.lstm(concatenated)
 
         # add dropout
-        lstm_out = self.dropout(lstm_out)
+        # lstm_out = self.dropout(lstm_out)
 
         # classifier: [batch, window, n_classes]
         # clf_out = self.linear(lstm_out)
