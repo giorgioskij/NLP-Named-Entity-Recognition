@@ -16,8 +16,6 @@ import pickle
 
 sys.path.append(str(Path(__file__).parent.parent))
 
-from stud.nerdtagger import NerdTagger
-from stud import pretrained
 from stud import dataset
 from stud import config
 from stud import lstm
@@ -93,4 +91,4 @@ params = hypers.get_default_params(model, vocab)
 #     torch.load(config.MODEL / 'emb-100.pth', map_location=config.DEVICE))
 
 print(f'training model: {model}')
-lstm.train(model, trainloader, devloader, params)
+lstm.train(model, trainloader, devloader, params, use_crf=True)

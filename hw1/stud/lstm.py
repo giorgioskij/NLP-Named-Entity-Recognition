@@ -15,7 +15,7 @@ from torch.nn import functional
 import torch.backends.cudnn
 from seqeval import metrics
 
-import torchcrf
+from torchcrf import CRF
 from . import dataset, config
 
 
@@ -56,12 +56,14 @@ class NerModelChar(nn.Module):
                  pretrained_emb: Optional[torch.Tensor] = None,
                  freeze_weights: bool = False,
                  use_pos: bool = False,
-                 double_linear: bool = False):
+                 double_linear: bool = False,
+                 char_mode: str = 'conv'):
         super().__init__()
 
         self.use_pos = use_pos
         self.double_linear = double_linear
         self.char_out_channels = char_out_channels
+        self.char_mode: str = char_mode
 
         # word embedding
         if pretrained_emb is not None:
@@ -128,7 +130,7 @@ class NerModelChar(nn.Module):
         # flatten: [batch * window, chars, char_emb]
         char_embeddings = char_embeddings.flatten(start_dim=0, end_dim=1)
 
-        if False:
+        if self.char_mode.lower() == 'lstm':
 
             # char_lstm_out: [batch * window, n_chars, char_hidden]
             # char_lstm_hidden: [2, batch * window, char_hidden]
@@ -145,18 +147,19 @@ class NerModelChar(nn.Module):
             # take only the last timestep: [batch * window, char_hidden]
             char_out = char_lstm_out[:, -1, :].reshape(batch_size, window_size,
                                                        char_lstm_out.shape[2])
+        else:
+            char_embeddings = char_embeddings.unsqueeze(1)
 
-        char_embeddings = char_embeddings.unsqueeze(1)
+            # convolution and maxpool
+            chars_cnn_out = self.char_cnn(char_embeddings)
+            char_out = functional.max_pool2d(
+                chars_cnn_out, kernel_size=(chars_cnn_out.shape[2],
+                                            1)).view(chars_cnn_out.shape[0],
+                                                     self.char_out_channels)
 
-        # convolution and maxpool
-        chars_cnn_out = self.char_cnn(char_embeddings)
-        char_out = functional.max_pool2d(
-            chars_cnn_out, kernel_size=(chars_cnn_out.shape[2],
-                                        1)).view(chars_cnn_out.shape[0],
-                                                 self.char_out_channels)
-
-        # reshape to divide batch and word
-        char_out = char_out.reshape(batch_size, window_size, char_out.shape[1])
+            # reshape to divide batch and word
+            char_out = char_out.reshape(batch_size, window_size,
+                                        char_out.shape[1])
 
         # get word embeddings: [batch, window, word_hidden]
         embeddings = self.embedding(x)
@@ -309,7 +312,8 @@ def train(model: NerModel,
           trainloader: torch.utils.data.DataLoader,
           devloader: torch.utils.data.DataLoader,
           params: TrainParams,
-          logic: bool = False) -> None:
+          logic: bool = False,
+          use_crf: bool = False) -> None:
     """Trains the model
 
     Args:
@@ -325,6 +329,13 @@ def train(model: NerModel,
     torch.backends.cudnn.deterministic = True
     torch.backends.cudnn.benchmark = False
 
+    if use_crf:
+        crf = CRF(num_tags=14, batch_first=True)
+        crf_opt = torch.optim.SGD(crf.parameters(), lr=0.001)
+    else:
+        crf = None
+        crf_opt = None
+
     model.to(params.device)
     path = params.save_path / f"{datetime.now().strftime('%d%b-%H:%M')}.pth"
     best_score, best_epoch = 0, 0
@@ -339,7 +350,9 @@ def train(model: NerModel,
             model.train()
             _, _, train_f1 = run_epoch(model=model,
                                        dataloader=trainloader,
-                                       params=params)
+                                       params=params,
+                                       crf=crf,
+                                       crf_opt=crf_opt)
 
             if params.scheduler is not None:
                 lr = params.scheduler.get_lr()[0]  # type: ignore
@@ -390,7 +403,9 @@ def run_epoch(model: NerModel,
               dataloader: torch.utils.data.DataLoader,
               params: TrainParams,
               evaluate: bool = False,
-              logic: bool = True) -> Tuple[float, float, float]:
+              logic: bool = True,
+              crf: Optional[CRF] = None,
+              crf_opt=None) -> Tuple[float, float, float]:
     """Runs a single epoch on the given dataloader
 
     Args:
@@ -418,22 +433,42 @@ def run_epoch(model: NerModel,
         inputs, labels = (data[0].to(params.device),
                           data[1].to(params.device).flatten())
 
+        batch_size, window_size = inputs.shape[:2]
+
         postags = data[2].to(params.device) if model.use_pos else None
         chars = (data[2].to(params.device)
                  if isinstance(model, NerModelChar) else None)
 
         # forward and backward pass
-        loss, outputs = step(model, params.loss_fn, inputs, labels, postags,
-                             chars, params.optimizer if not evaluate else None)
+        loss, outputs = step(
+            model, params.loss_fn, inputs, labels, postags, chars,
+            params.optimizer if not evaluate and crf is None else None)
 
-        # evaluate predictions
-        predictions = torch.argmax(outputs, dim=1)
+        if crf is not None:
+            outputs = outputs.reshape(batch_size, window_size, -1)
+            outputs = torch.cat((outputs, torch.zeros(128, 100, 1)), dim=2)
+            labels = labels.reshape(batch_size, window_size)
+            mask = (labels != params.vocab.pad_label_id)
+            loss = -crf(outputs, labels, mask)
+            loss.backward()
+            params.optimizer.step()
+            crf_opt.step()
+            params.optimizer.zero_grad()
+            crf_opt.zero_grad()
+
+            # evaluate predictions
+            predictions = crf.decode(outputs, mask)
+            real_predictions = torch.LongTensor(
+                [p for s in predictions for p in s])
+
+        else:
+            predictions = torch.argmax(outputs, dim=1)
 
         if evaluate and logic:
             predictions = apply_logic(predictions)
+            real_predictions = predictions[labels != params.vocab.pad_label_id]
 
         # exclude padding from stats
-        real_predictions = predictions[labels != params.vocab.pad_label_id]
         real_labels = labels[labels != params.vocab.pad_label_id]
         correct = (real_predictions == real_labels).sum().item()
 
