@@ -30,31 +30,26 @@ device = config.DEVICE
 
 # pretrained_emb, vocab_glove = pretrained.get_pretrained_embeddings()
 vocab = dataset.Vocabulary(path=config.MODEL / 'vocab-glove.pkl')
-char_vocab = dataset.CharVocabulary(path=config.MODEL / 'vocab-char.pkl')
+# char_vocab = dataset.CharVocabulary(path=config.MODEL / 'vocab-char.pkl')
 
-devset = dataset.NerDatasetChar(path=config.DEV,
-                                vocab=vocab,
-                                char_vocab=char_vocab)
+devset = dataset.NerDataset(path=config.DEV, vocab=vocab)
 
 devloader = DataLoader(devset, batch_size=32)
 
-model = lstm.NerModelChar(n_classes=13,
-                          embedding_dim=100,
-                          char_embedding_dim=50,
-                          char_vocab=char_vocab,
-                          vocab_size=len(vocab),
-                          padding_idx=vocab.pad,
-                          hidden_size=100,
-                          char_hidden_size=50,
-                          bidirectional=True,
-                          pretrained_emb=None).to(config.DEVICE)
+model = lstm.NerModel(n_classes=13,
+                      embedding_dim=100,
+                      vocab_size=len(vocab),
+                      padding_idx=vocab.pad,
+                      hidden_size=100,
+                      bidirectional=True,
+                      pretrained_emb=None).to(config.DEVICE)
 
 params = hypers.get_default_params(model, vocab)
 
 #%%
 # test
 model.load_state_dict(
-    torch.load(config.MODEL / '9646-charembedding-glove.pth',
+    torch.load(config.MODEL / '7385-glove-stacked-100h.pth',
                map_location=config.DEVICE))
 lstm.test(model, devloader, params)
 

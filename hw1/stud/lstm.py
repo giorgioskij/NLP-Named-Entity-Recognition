@@ -7,7 +7,6 @@ import time
 import pathlib
 from datetime import datetime
 from dataclasses import dataclass
-import os
 
 import torch
 import torch.utils.data
@@ -16,9 +15,8 @@ from torch.nn import functional
 import torch.backends.cudnn
 from seqeval import metrics
 
+import torchcrf
 from . import dataset, config
-
-# TODO: add fixed seed
 
 
 @dataclass
@@ -193,11 +191,14 @@ class NerModel(nn.Module):
                  pretrained_emb: Optional[torch.Tensor] = None,
                  freeze_weights: bool = False,
                  double_linear: bool = False,
-                 use_pos: bool = False):
+                 use_pos: bool = False,
+                 use_crf: bool = False):
         super().__init__()
 
         self.double_linear: bool = double_linear
         self.use_pos: bool = use_pos
+        self.use_crf: bool = use_crf
+        self.padding_idx: int = padding_idx
 
         if pretrained_emb is not None:
             self.embedding = nn.Embedding.from_pretrained(
@@ -235,6 +236,9 @@ class NerModel(nn.Module):
                                     2 if bidirectional else hidden_size,
                                     out_features=n_classes)
 
+        if self.use_crf:
+            self.crf = torchcrf.CRF(num_tags=13, batch_first=True)
+
         # extra stuff
         # self.lstm2 = nn.LSTM(input_size=n_classes,
         #                      hidden_size=50,
@@ -250,6 +254,9 @@ class NerModel(nn.Module):
 
         embeddings = self.embedding(x)
         embeddings = self.dropout(embeddings)
+
+        # for crf
+        # mask = x[x != self.padding_idx]
         # print(f'emb: {embeddings.shape}')
 
         if self.use_pos and pos_tags is not None:
@@ -264,6 +271,7 @@ class NerModel(nn.Module):
             clf_out = self.linear1(lstm_out)
             clf_out = self.dropout(torch.relu(clf_out))
             clf_out = self.linear2(clf_out)
+
         else:
             clf_out = self.linear(lstm_out)
 

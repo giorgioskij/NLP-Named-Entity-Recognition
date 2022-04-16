@@ -40,45 +40,44 @@ with open(config.MODEL / 'glove-emb-vocab.pkl', 'rb') as f:
 
 vocab = vocab_glove
 
-# vocab = dataset.Vocabulary(path=config.MODEL / 'vocab.pkl')
-trainset = dataset.NerDatasetChar(vocab=vocab, window_size=50)
-# vocab = trainset.vocab
-devset = dataset.NerDatasetChar(path=config.DEV,
-                                vocab=vocab,
-                                char_vocab=trainset.char_vocab,
-                                window_size=100)
+# trainset = dataset.NerDatasetChar(vocab=vocab, window_size=50)
+# devset = dataset.NerDatasetChar(path=config.DEV,
+#                                 vocab=vocab,
+#                                 char_vocab=trainset.char_vocab,
+#                                 window_size=100)
 
-trainloader, devloader = dataset.get_dataloaders(trainset=trainset,
-                                                 devset=devset,
+# trainloader, devloader = dataset.get_dataloaders(trainset=trainset,
+#                                                  devset=devset,
+#                                                  batch_size_train=128)
+
+# without char
+trainloader, devloader = dataset.get_dataloaders(use_pos=False,
+                                                 vocab=vocab,
+                                                 window_size=50,
                                                  batch_size_train=128)
 
-# trainloader, devloader = dataset.get_dataloaders(use_pos=False,
-#                                                  vocab=vocab,
-#                                                  window_size=100,
-#                                                  batch_size_train=64)
-
 # with char embedding
-model = lstm.NerModelChar(n_classes=13,
-                          embedding_dim=100,
-                          char_embedding_dim=50,
-                          char_vocab=trainset.char_vocab,
-                          vocab_size=len(vocab),
-                          padding_idx=vocab.pad,
-                          hidden_size=300,
-                          char_out_channels=50,
-                          char_hidden_size=50,
-                          bidirectional=True,
-                          pretrained_emb=pretrained_emb,
-                          freeze_weights=False).to(config.DEVICE)
+# model = lstm.NerModelChar(n_classes=13,
+#                           embedding_dim=100,
+#                           char_embedding_dim=50,
+#                           char_vocab=trainset.char_vocab,
+#                           vocab_size=len(vocab),
+#                           padding_idx=vocab.pad,
+#                           hidden_size=300,
+#                           char_out_channels=50,
+#                           char_hidden_size=50,
+#                           bidirectional=True,
+#                           pretrained_emb=pretrained_emb,
+#                           freeze_weights=False).to(config.DEVICE)
 
 # without char embedding
-# model = lstm.NerModel(n_classes=13,
-#                       embedding_dim=100,
-#                       vocab_size=len(vocab),
-#                       padding_idx=vocab.pad,
-#                       hidden_size=100,
-#                       bidirectional=True,
-#                       pretrained_emb=pretrained_emb).to(config.DEVICE)
+model = lstm.NerModel(n_classes=13,
+                      embedding_dim=100,
+                      vocab_size=len(vocab),
+                      padding_idx=vocab.pad,
+                      hidden_size=100,
+                      bidirectional=True,
+                      pretrained_emb=pretrained_emb).to(config.DEVICE)
 
 params = hypers.get_default_params(model, vocab)
 
