@@ -330,7 +330,7 @@ def train(model: NerModel,
     torch.backends.cudnn.benchmark = False
 
     if use_crf:
-        crf = CRF(num_tags=14, batch_first=True)
+        crf = CRF(num_tags=14, batch_first=True).to(params.device)
         crf_opt = torch.optim.SGD(crf.parameters(), lr=0.001)
     else:
         crf = None
@@ -446,7 +446,8 @@ def run_epoch(model: NerModel,
 
         if crf is not None:
             outputs = outputs.reshape(batch_size, window_size, -1)
-            outputs = torch.cat((outputs, torch.zeros(128, 100, 1)), dim=2)
+            outputs = torch.cat(
+                (outputs, torch.zeros(128, 100, 1).to(params.device)), dim=2)
             labels = labels.reshape(batch_size, window_size)
             mask = (labels != params.vocab.pad_label_id)
             loss = -crf(outputs, labels, mask)
