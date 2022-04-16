@@ -364,7 +364,9 @@ def train(model: NerModel,
                                         dataloader=devloader,
                                         params=params,
                                         evaluate=True,
-                                        logic=logic)
+                                        logic=logic,
+                                        crf=crf,
+                                        crf_opt=crf_opt)
 
             # save the best model
             metric = f1
@@ -453,11 +455,13 @@ def run_epoch(model: NerModel,
             labels = labels.reshape(batch_size, window_size)
             mask = (labels != params.vocab.pad_label_id)
             loss = -crf(outputs, labels, mask)
-            loss.backward()
-            params.optimizer.step()
-            crf_opt.step()
-            params.optimizer.zero_grad()
-            crf_opt.zero_grad()
+
+            if not evaluate:
+                loss.backward()
+                params.optimizer.step()
+                crf_opt.step()
+                params.optimizer.zero_grad()
+                crf_opt.zero_grad()
 
             # evaluate predictions
             predictions = crf.decode(outputs, mask)
