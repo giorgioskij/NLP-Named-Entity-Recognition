@@ -447,7 +447,9 @@ def run_epoch(model: NerModel,
         if crf is not None:
             outputs = outputs.reshape(batch_size, window_size, -1)
             outputs = torch.cat(
-                (outputs, torch.zeros(128, 100, 1).to(params.device)), dim=2)
+                (outputs, torch.zeros(outputs.shape[0], outputs.shape[1], 1).to(
+                    params.device)),
+                dim=2)
             labels = labels.reshape(batch_size, window_size)
             mask = (labels != params.vocab.pad_label_id)
             loss = -crf(outputs, labels, mask)
