@@ -44,27 +44,22 @@ class StudentModel(Model):
         if device:
             self.device = torch.device(device)
 
-        self.char_vocab = dataset.CharVocabulary(path=config.MODEL /
-                                                 'vocab-char.pkl')
         self.vocab = dataset.Vocabulary(path=config.MODEL / 'vocab-glove.pkl')
 
-        self.model = lstm.NerModelChar(
+        self.model = lstm.NerModel(
             n_classes=13,
             embedding_dim=100,
-            char_embedding_dim=50,
-            char_vocab=self.char_vocab,
             vocab_size=len(self.vocab),
             padding_idx=self.vocab.pad,
             hidden_size=100,
-            char_hidden_size=50,
             bidirectional=True,
         ).to(self.device)
         self.model.load_state_dict(
-            torch.load(config.MODEL / '9646-charembedding-glove.pth',
+            torch.load(config.MODEL / '7385-glove-stacked-100h.pth',
                        map_location=self.device))
 
     def predict(self, tokens: List[List[str]]) -> List[List[str]]:
 
-        return lstm.predict_char(self.model, self.vocab, self.char_vocab,
-                                 tokens, self.device)
-        # return lstm.predict(self.model, self.vocab, tokens, self.device)
+        # return lstm.predict_char(self.model, self.vocab, self.char_vocab,
+        #  tokens, self.device)
+        return lstm.predict(self.model, self.vocab, tokens, self.device)
