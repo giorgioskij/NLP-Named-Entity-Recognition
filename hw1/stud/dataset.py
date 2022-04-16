@@ -76,10 +76,8 @@ class CharVocabulary:
             #         chars = chars | set(w)
             # chars = chars | {self.pad_label, self.unk_label}
             # chars = sorted(list(chars))
-            self.ctos: List[str] = sorted(
-                list(
-                    filter(lambda x: chars[x] >= threshold,
-                           chars.keys())) +
+            self.itoc: List[str] = sorted(
+                list(filter(lambda x: chars[x] >= threshold, chars.keys())) +
                 [self.unk_label, self.pad_label])
 
             # self.itoc: List[str] = chars
