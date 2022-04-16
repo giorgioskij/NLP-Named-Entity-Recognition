@@ -521,7 +521,7 @@ class NerDatasetChar(NerDataset):
             self) -> List[Tuple[torch.Tensor, torch.Tensor, torch.Tensor]]:
         windows: List[Tuple[torch.Tensor, torch.Tensor, torch.Tensor]] = []
         # self.max_word_len = max(len(w[0]) for w in self.sentences)
-        self.max_word_len = 15
+        self.max_word_len = 5
         for word_ids, label_ids, word_chars in self.indexed_data:
             start = 0
             while start < len(word_ids):

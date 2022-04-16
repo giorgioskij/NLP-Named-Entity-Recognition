@@ -69,20 +69,16 @@ model = lstm.NerModelChar(n_classes=13,
                           char_hidden_size=25,
                           bidirectional=True,
                           pretrained_emb=pretrained_emb,
-                          freeze_weights=True).to(config.DEVICE)
+                          freeze_weights=False).to(config.DEVICE)
 
 # without char embedding
-# model = lstm.NerModel(
-#     n_classes=13,
-#     embedding_dim=100,
-#     #   char_embedding_dim=50,
-#     #   char_vocab=trainset.char_vocab,
-#     vocab_size=len(vocab),
-#     padding_idx=vocab.pad,
-#     hidden_size=100,
-#     #   char_hidden_size=50,
-#     bidirectional=True,
-#     pretrained_emb=pretrained_emb).to(config.DEVICE)
+# model = lstm.NerModel(n_classes=13,
+#                       embedding_dim=100,
+#                       vocab_size=len(vocab),
+#                       padding_idx=vocab.pad,
+#                       hidden_size=100,
+#                       bidirectional=True,
+#                       pretrained_emb=pretrained_emb).to(config.DEVICE)
 
 params = hypers.get_default_params(model, vocab)
 
