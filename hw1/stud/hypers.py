@@ -1,6 +1,7 @@
 """
 Handles the generation of hyperparameters, and provides easy function to avoid
-the repetition of boilerplate code.
+the repetition of boilerplate code. It does not contain any implementation, but
+rather calls to function with many arguments, so it can easily be ignored.
 
 Example - entire code to train a model on ConLL
 

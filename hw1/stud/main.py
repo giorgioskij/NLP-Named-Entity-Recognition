@@ -24,7 +24,7 @@ from stud import hypers
 
 device = config.DEVICE
 
-dataset = dataset.NerDataset()
+# dataset = dataset.NerDataset()
 
 # pretrained.build_pretrained_embeddings(save_stuff=True,
 #                                        freeze=False,
@@ -93,4 +93,8 @@ params = hypers.get_default_params(model, vocab)
 #     torch.load(config.MODEL / 'emb-100.pth', map_location=config.DEVICE))
 
 print(f'training model: {model}')
-lstm.train(model, trainloader, devloader, params, use_crf=True)
+train_loss, train_f1, eval_loss, eval_f1 = lstm.train(model,
+                                                      trainloader,
+                                                      devloader,
+                                                      params,
+                                                      use_crf=True)

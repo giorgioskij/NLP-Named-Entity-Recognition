@@ -7,6 +7,7 @@ import sys
 import torch
 from torch import nn
 from torch.utils.data import DataLoader
+import torchcrf
 
 sys.path.append(str(Path(__file__).parent.parent))
 
@@ -46,12 +47,17 @@ model = lstm.NerModel(n_classes=13,
 
 params = hypers.get_default_params(model, vocab)
 
+crf = torchcrf.CRF(num_tags=14, batch_first=True).to(config.DEVICE)
+
 #%%
 # test
 model.load_state_dict(
-    torch.load(config.MODEL / '7561-stacked-100h-crf.pth',
+    torch.load(config.MODEL / '7572-stacked-100h-crf.pth',
                map_location=config.DEVICE))
-lstm.test(model, devloader, params)
+crf.load_state_dict(
+    torch.load(config.MODEL / 'crf-7572.pth', map_location=config.DEVICE))
+
+lstm.test(model, devloader, params, crf=crf)
 
 # train
 # model.load_state_dict(

@@ -1,9 +1,12 @@
+"""
+This file holds utility functions to interact with the Conll-2003 dataset.
+It doesn't include any implementation, but rather calls to other functions with
+many arguments, so it serves only to reduce boilerplate code in the main files.
+"""
 from pathlib import Path
-from typing import Optional
 
 import torch
 import torch.utils.data
-from torch import nn
 
 from . import dataset, lstm, config, hypers
 
@@ -19,7 +22,7 @@ def get_conll_dataloaders():
 
     Returns:
         Tuple[torch.utils.data.dataloader, torch.utils.data.dataloader]:
-            train dataloader and eval dataloader 
+            train dataloader and eval dataloader
     """
     trainset = dataset.NerDataset(path=config.DATA /
                                   Path('conll2003/train.txt'),
@@ -48,7 +51,8 @@ def train_on_conll():
     """
 
     trainloader, devloader = get_conll_dataloaders()
-    model, params = hypers.get_conll_hypers(trainloader.dataset.vocab)
+    model, params = hypers.get_conll_hypers(
+        trainloader.dataset.vocab)  # type: ignore
     lstm.train(model, trainloader, devloader, params)
 
     return model
@@ -61,7 +65,8 @@ def test_on_conll(model_name: str):
         model_name (str): basename of the trained model
     """
     _, devloader = get_conll_dataloaders()
-    model, params = hypers.get_conll_hypers(devloader.dataset.vocab)
+    model, params = hypers.get_conll_hypers(
+        devloader.dataset.vocab)  # type: ignore
 
     model_path: Path = config.MODEL / f'{model_name}.pth'
     model.load_state_dict(torch.load(model_path))

@@ -2,7 +2,7 @@
 Implements Deep Learning-related stuff to perform Named Entity Classification
 """
 
-from typing import List, Optional, Tuple
+from typing import Iterable, List, Optional, Tuple
 import time
 import pathlib
 from datetime import datetime
@@ -58,6 +58,36 @@ class NerModelChar(nn.Module):
                  use_pos: bool = False,
                  double_linear: bool = False,
                  char_mode: str = 'conv'):
+        """
+        Initializes a model to perform NER using character embeddings as well
+        as word embeddings.
+
+        Args:
+            n_classes (int): number of classes
+            embedding_dim (int): dimension of the word embeddings
+            char_embedding_dim (int): dimension of the character embeddings
+            char_vocab (dataset.CharVocabulary): char vocabulary to use
+            vocab_size (int): size of the word vocabulary
+            padding_idx (int): index of the padding word
+            hidden_size (int): size of the hidden layer of the main LSTM
+            char_hidden_size (int): hidden size of the character LSTM
+            char_out_channels (int): out-channels of the char convolution layer
+            bidirectional (bool, optional):
+                Whether the main LSTM is bidirectional. Defaults to False.
+            pretrained_emb (Optional[torch.Tensor], optional):
+                pretrained word embeddings to load. Defaults to None.
+            freeze_weights (bool, optional):
+                if pretrained embeddings are specified, whether to freeze them.
+                Defaults to False.
+            use_pos (bool, optional):
+                whether to use pos tags. Defaults to False.
+            double_linear (bool, optional):
+                if true, the classifier is made by two fc-layers.
+                Defaults to False.
+            char_mode (str, optional):
+                what type of model to use to obtain character embeddings,
+                between 'lstm' and 'conv'. Defaults to 'conv'.
+        """
         super().__init__()
 
         self.use_pos = use_pos
@@ -194,13 +224,32 @@ class NerModel(nn.Module):
                  pretrained_emb: Optional[torch.Tensor] = None,
                  freeze_weights: bool = False,
                  double_linear: bool = False,
-                 use_pos: bool = False,
-                 use_crf: bool = False):
+                 use_pos: bool = False):
+        """Initializes a model to perform NER
+
+        Args:
+            n_classes (int): number of classes
+            embedding_dim (int): dimension of the word embeddings
+            vocab_size (int): size of the word vocabulary
+            padding_idx (int): index of the padding word
+            hidden_size (int): size of the hidden layer of the main LSTM
+            bidirectional (bool, optional):
+                Whether the main LSTM is bidirectional. Defaults to False.
+            pretrained_emb (Optional[torch.Tensor], optional):
+                pretrained word embeddings to load. Defaults to None.
+            freeze_weights (bool, optional):
+                if pretrained embeddings are specified, whether to freeze them.
+                Defaults to False.
+            double_linear (bool, optional):
+                if true, the classifier is made by two fc-layers.
+                Defaults to False.
+            use_pos (bool, optional):
+                whether to use pos tags. Defaults to False.
+        """
         super().__init__()
 
         self.double_linear: bool = double_linear
         self.use_pos: bool = use_pos
-        self.use_crf: bool = use_crf
         self.padding_idx: int = padding_idx
 
         if pretrained_emb is not None:
@@ -288,12 +337,14 @@ class NerModel(nn.Module):
 #                          freeze_weights, double_linear)
 
 
-def train(model: NerModel,
-          trainloader: torch.utils.data.DataLoader,
-          devloader: torch.utils.data.DataLoader,
-          params: TrainParams,
-          logic: bool = False,
-          use_crf: bool = False) -> None:
+def train(
+    model: NerModel,
+    trainloader: torch.utils.data.DataLoader,
+    devloader: torch.utils.data.DataLoader,
+    params: TrainParams,
+    logic: bool = False,
+    use_crf: bool = False
+) -> Tuple[List[float], List[float], List[float], List[float]]:
     """Trains the model
 
     Args:
@@ -301,6 +352,14 @@ def train(model: NerModel,
         trainloader (nn.utils.data.DataLoader): dataloader for training
         devloader (nn.utils.data.DataLoader): dataloader for evaluation
         params (TrainParams): parameters
+        logic (bool, optional): whether to use logic rules. Defaults to False
+        use_crf (bool, optional): whether to use CRF. Defaults to False
+
+    Returns:
+        List[float]: History of the training loss
+        List[float]: History of the training f1-score 
+        List[float]: History of the evaluation loss
+        List[float]: History of the evaluation f1-score
     """
 
     torch.manual_seed(config.SEED)
@@ -309,8 +368,14 @@ def train(model: NerModel,
     torch.backends.cudnn.deterministic = True
     torch.backends.cudnn.benchmark = False
 
+    f1_train_hist = []
+    f1_eval_hist = []
+    loss_train_hist = []
+    loss_eval_hist = []
+
     if use_crf:
-        crf = CRF(num_tags=14, batch_first=True).to(params.device)
+        crf: Optional[nn.Module] = CRF(num_tags=14,
+                                       batch_first=True).to(params.device)
         crf_opt = torch.optim.SGD(crf.parameters(), lr=0.001)
     else:
         crf = None
@@ -318,6 +383,7 @@ def train(model: NerModel,
 
     model.to(params.device)
     path = params.save_path / f"{datetime.now().strftime('%d%b-%H:%M')}.pth"
+    crf_path = params.save_path / f"crf-{datetime.now().strftime('%d%b-%H:%M')}.pth"
     best_score, best_epoch = 0, 0
 
     try:
@@ -328,11 +394,13 @@ def train(model: NerModel,
 
             # train for an epoch
             model.train()
-            _, _, train_f1 = run_epoch(model=model,
-                                       dataloader=trainloader,
-                                       params=params,
-                                       crf=crf,
-                                       crf_opt=crf_opt)
+            _, train_loss, train_f1 = run_epoch(model=model,
+                                                dataloader=trainloader,
+                                                params=params,
+                                                crf=crf,
+                                                crf_opt=crf_opt)
+            f1_train_hist.append(train_f1)
+            loss_train_hist.append(train_loss)
 
             if params.scheduler is not None:
                 lr = params.scheduler.get_lr()[0]  # type: ignore
@@ -340,13 +408,15 @@ def train(model: NerModel,
 
             # test the model
             model.eval()
-            accuracy, _, f1 = run_epoch(model=model,
-                                        dataloader=devloader,
-                                        params=params,
-                                        evaluate=True,
-                                        logic=logic,
-                                        crf=crf,
-                                        crf_opt=crf_opt)
+            accuracy, loss, f1 = run_epoch(model=model,
+                                           dataloader=devloader,
+                                           params=params,
+                                           evaluate=True,
+                                           logic=logic,
+                                           crf=crf,
+                                           crf_opt=crf_opt)
+            f1_eval_hist.append(f1)
+            loss_eval_hist.append(loss)
 
             # save the best model
             metric = f1
@@ -354,51 +424,66 @@ def train(model: NerModel,
                 best_epoch = epoch + 1
                 best_score = metric
                 torch.save(model.state_dict(), path)
+                if crf is not None:
+                    torch.save(crf.state_dict(), crf_path)
 
             if params.verbose:
                 if params.log_steps is not None:
                     print('-' * 59)
-                print(
-                    f'Epoch {epoch + 1:3d} ',
-                    f'| {time.time() - epoch_start_time:5.2f}s ',
-                    f'| lr {lr:6.5f} ' if params.scheduler is not None else '',
-                    f'| Eval acc {accuracy:.2%} ',
-                    f'| Eval f1 {f1:6.2%} ',
-                    f'| Train f1 {train_f1:6.2%}',
-                    sep='')
+                print(f'Epoch {epoch + 1:3d} ',
+                      f'| {time.time() - epoch_start_time:5.2f}s ',
+                      f'| Eval acc {accuracy:.2%} ',
+                      f'| Eval f1 {f1:6.2%} ',
+                      f'| Train f1 {train_f1:6.2%}',
+                      sep='')
                 if params.log_steps is not None:
                     print('-' * 59)
 
         if params.verbose:
             print(f'Saved model from epoch {best_epoch} '
                   f'with score {best_score:.2%} at {path}')
+            if crf is not None:
+                print(f'Saved crf at {crf_path}')
 
         # model.load_state_dict(torch.load(path))
     except KeyboardInterrupt:
         print('Stopping training...')
         print(f'Model from epoch {best_epoch} '
               f'with score {best_score:.2%} is saved at {path}')
-    return None
+        return loss_train_hist, f1_train_hist, loss_eval_hist, f1_eval_hist
+
+    return loss_train_hist, f1_train_hist, loss_eval_hist, f1_eval_hist
 
 
-def run_epoch(model: NerModel,
-              dataloader: torch.utils.data.DataLoader,
-              params: TrainParams,
-              evaluate: bool = False,
-              logic: bool = True,
-              crf: Optional[CRF] = None,
-              crf_opt=None) -> Tuple[float, float, float]:
+def run_epoch(
+    model: NerModel,
+    dataloader: torch.utils.data.DataLoader,
+    params: TrainParams,
+    evaluate: bool = False,
+    logic: bool = True,
+    crf: Optional[CRF] = None,
+    crf_opt: Optional[torch.optim.Optimizer] = None
+) -> Tuple[float, float, float]:
     """Runs a single epoch on the given dataloader
 
     Args:
-        index (int): Index of the current epoch to display
         model (nn.Module): model to use
         dataloader (torch.utils.data.DataLoader): dataloader to use
         params (TrainParams): parameters
-        test (bool): if it's an evaluation epoch
+        evaluate (bool, optional):
+            if it's an evaluation epoch. Defaults to False
+        logic (bool, optional):
+            whether to use logic rules. Defaults to False
+        crf (torchcrf.CRF, optional):
+            the CRF model to use. Defaults to None
+        crf_opt (torch.optim.Optimizer, optional):
+            if crf is specified, the optimizer to use for the CRF model.
+            Defaults to None
 
     Returns:
-        Tuple[float, float, float]: accuracy, loss, f1 score
+        float: accuracy
+        float: loss
+        float: f1-score
     """
 
     model.to(params.device)
@@ -436,7 +521,7 @@ def run_epoch(model: NerModel,
             mask = (labels != params.vocab.pad_label_id)
             loss = -crf(outputs, labels, mask)
 
-            if not evaluate:
+            if not evaluate and crf_opt and params.optimizer:
                 loss.backward()
                 params.optimizer.step()
                 crf_opt.step()
@@ -453,7 +538,7 @@ def run_epoch(model: NerModel,
             real_predictions = predictions[labels != params.vocab.pad_label_id]
 
         if evaluate and logic:
-            predictions = apply_logic(predictions)
+            predictions = apply_logic(torch.LongTensor(predictions))
 
         # exclude padding from stats
         real_labels = labels[labels != params.vocab.pad_label_id]
@@ -481,7 +566,7 @@ def run_epoch(model: NerModel,
         [[params.vocab.get_label(i) for i in predicted_labels]],
         average=params.f1_average)  # type: ignore
 
-    return accuracy, loss, f1
+    return accuracy, float(loss), f1
 
 
 def apply_logic(tags: torch.LongTensor) -> torch.Tensor:
@@ -497,7 +582,7 @@ def apply_logic(tags: torch.LongTensor) -> torch.Tensor:
     Returns:
         torch.Tensor: the correct tag sequence
     """
-    new_tags: torch.Tensor = tags.clone()
+    new_tags: torch.Tensor = torch.Tensor(tags).clone()
     for i in range(1, len(new_tags)):
         tag = int(new_tags[i])
         prev_tag = int(tags[i - 1])
@@ -608,8 +693,9 @@ def step(model: NerModel,
 def test(model: NerModel,
          dataloader: torch.utils.data.DataLoader,
          params: TrainParams,
-         logic: bool = False):
-    acc, loss, f1 = run_epoch(model, dataloader, params, True, logic)
+         logic: bool = False,
+         crf: Optional[CRF] = None):
+    acc, loss, f1 = run_epoch(model, dataloader, params, True, logic, crf=crf)
 
     if params.verbose:
         print(f'Accuracy: {acc:.2%} | Loss: {loss:.4f} | F1: {f1:.2%}')
@@ -676,34 +762,3 @@ def predict_char(model: nn.Module, vocab: dataset.Vocabulary,
         ]
         labels.append(str_predictions)
     return labels
-
-
-# from evaluate.py
-def read_dataset(path: str) -> Tuple[List[List[str]], List[List[str]]]:
-
-    tokens_s = []
-    labels_s = []
-
-    tokens = []
-    labels = []
-
-    with open(path) as f:
-
-        for line in f:
-
-            line = line.strip()
-
-            if line.startswith("#\t"):
-                tokens = []
-                labels = []
-            elif line == "":
-                tokens_s.append(tokens)
-                labels_s.append(labels)
-            else:
-                token, label = line.split("\t")
-                tokens.append(token)
-                labels.append(label)
-
-    assert len(tokens_s) == len(labels_s)
-
-    return tokens_s, labels_s

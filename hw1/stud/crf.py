@@ -1,6 +1,10 @@
 """
-All the code in this file is taken from 
+Implements a CRF algorithm. All the code in this file is taken from
 https://github.com/jidasheng/bi-lstm-crf/blob/0d4dc92198008e3a38e1247c1adaddb8261ceb99/bi_lstm_crf/model/crf.py#L15
+
+After some testing, I ended up not using it, in favour of the library
+pytorch-crf which led to better and easier results, so this whole file can be
+ignored.
 """
 
 import torch

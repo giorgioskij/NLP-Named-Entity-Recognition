@@ -1,5 +1,6 @@
 """
-Contains classes and functions for the management of the data
+Contains classes and functions for the management of the data, such as custom
+datasets which extend torch.util.data.Dataset, and custom vocabularies.
 """
 
 from typing import Dict, List, Optional, Tuple, Union, Iterable
@@ -57,6 +58,24 @@ class CharVocabulary:
                  sentences: Optional[List[Tuple[List[str], List[str]]]] = None,
                  path: Optional[Path] = None,
                  threshold: int = 2):
+        """
+        Initializes a character vocabulary, either from a list of sentences,
+        or by loading it from a path
+
+        Args:
+            sentences (Optional[List[Tuple[List[str], List[str]]]], optional):
+                A list of tuples in the form <list of words, list of labels>
+                to initialize the vocabulary from. Defaults to None.
+            path (Optional[Path], optional):
+                The path from which to load the vocabulary. Defaults to None.
+            threshold (int, optional):
+                If sentences is specified, the number of occurrences needed
+                for a character to be included. Defaults to 2.
+
+        Raises:
+            ValueError:
+                Either a list of sentences or a path have to be specified
+        """
 
         self.unk_label: str = '<unk>'
         self.pad_label: str = '<pad>'
@@ -95,9 +114,25 @@ class CharVocabulary:
         return len(self.itoc)
 
     def get_char_id(self, char: str) -> int:
+        """Returns the index for the given char
+
+        Args:
+            char (str): the character as a string
+
+        Returns:
+            int: the corresponding index
+        """
         return self.ctoi[char] if char in self.ctoi else self.unk
 
     def get_char(self, idx: int) -> str:
+        """Returns the character corresponding to the given index.
+
+        Args:
+            idx (int): the index
+
+        Returns:
+            str: the corresponding character
+        """
         return self.itoc[idx]
 
     def __getitem__(self, idx: Union[int, str]) -> Union[str, float]:
@@ -108,10 +143,23 @@ class CharVocabulary:
         raise NotImplementedError()
 
     def dump_data(self, path: Path):
+        """Dumps itself as a binary at the given path
+
+        Args:
+            path (Path): the path to dump to
+        """
         with open(path, 'wb') as f:
             pickle.dump(self.itoc, f)
 
     def load_data(self, path: Path) -> List[str]:
+        """Loads a vocabulary from the given path
+
+        Args:
+            path (Path): the path to load from
+
+        Returns:
+            List[str]: the loaded index-to-character list
+        """
         with open(path, 'rb') as f:
             itoc = pickle.load(f)
         return itoc
@@ -138,6 +186,18 @@ class Vocabulary:
             threshold (int, optional):
                 Number of appearances needed for a word to
                 be inserted in the dictionary. Defaults to 1.
+
+            path (Path, optional):
+                The path to load the vocabulary from. Defaults to None
+
+            premade: (List[str], optional):
+                A list of words to initialize the vocabulary from.
+                Defaults to None.
+
+        Raises:
+            ValueError:
+                either a path, a list of sentences, or a premade list
+                of words have to be specified.
         """
 
         if path is None and sentences is None and premade is None:
@@ -233,10 +293,23 @@ class Vocabulary:
             pickle.dump((self.counts, self.lcounts), f)
 
     def dump_data(self, path: Path):
+        """Dumps itself as a binary at the given path
+
+        Args:
+            path (Path): the path to dump to
+        """
         with open(path, 'wb') as f:
             pickle.dump((self.itos, self.ltos), f)
 
     def load_data(self, path: Path) -> Tuple[List[str], List[str]]:
+        """Loads a vocabulary from the given path
+
+        Args:
+            path (Path): the path to load from
+
+        Returns:
+            Tuple[List[str], List[str]]: lists index-to-word and index-to-label
+        """
         with open(path, 'rb') as f:
             itos, ltos = pickle.load(f)
         return itos, ltos
@@ -293,9 +366,27 @@ class Vocabulary:
         raise NotImplementedError()
 
     def decode(self, sentence: Iterable[int]) -> str:
+        """Decodes a sentences to human-readable form
+
+        Args:
+            sentence (Iterable[int]): the sentence as an iterable of indices
+
+        Returns:
+            str: the human-readable sentence
+        """
         return ' '.join([self.get_word(i) for i in sentence])
 
     def encode(self, sentence: str, lower: bool = True) -> List[int]:
+        """Encodes to indices a human-readable sentence
+
+        Args:
+            sentence (str): the sentence as a string
+            lower (bool, optional):
+                Whether to make it lowercase before encoding. Defaults to True.
+
+        Returns:
+            List[int]: a list of indices that encodes the sentence
+        """
         return [
             self.get_word_id(i.lower() if lower else i)
             for i in sentence.strip().split()
@@ -331,6 +422,18 @@ class NerDataset(torch.utils.data.Dataset):
                 Size of the windows. Defaults to 5.
             window_shift (int, optional):
                 Shift of the windows. Defaults to None.
+            is_conll (bool, optional):
+                True if the dataset is Conll-2003. Defaults to False.
+            lower (bool, optional):
+                Whether to store every sentence as lowercase. Defaults to False.
+
+        Raises:
+            ValueError:
+                if specified, window_shift has to be equal or smaller than
+                window_size, and both must be positive
+            ValueError:
+                cannot build a vocabulary from a file that does not contain the
+                word "train" in its name.
         """
         super().__init__()
         if vocab is None and 'train' not in str(path):
@@ -389,7 +492,7 @@ class NerDataset(torch.utils.data.Dataset):
                     line: List[str] = line_str.split()
                     words.append(line[0].lower() if lower else line[0])
                     labels.append(line[3])
-            if len(words):
+            if words:
                 sentences.append((words, labels))
 
         return sentences
@@ -483,7 +586,7 @@ class NerDataset(torch.utils.data.Dataset):
 
 class NerDatasetChar(NerDataset):
     """
-    Extends a NerDatasets, but returns the characters for each word as well
+    Extends a NerDatasets, but stores the characters for each word as well
     """
 
     def __init__(
@@ -495,6 +598,33 @@ class NerDatasetChar(NerDataset):
         window_size: int = 100,
         window_shift: Optional[int] = None,
     ):
+        """Initialize a NerDatsetChar
+
+        Args:
+            path (Path, optional):
+                The path to load the data from.
+                Defaults to Path('data/train.tsv').
+            vocab (Vocabulary, optional):
+                Vocabulary to index the data. If none, build one.
+                Defaults to None.
+            char_vocab (Optional[CharVocabulary], optional):
+                Same as vocab, but for the charcter vocabulary.
+                Defaults to None.
+            threshold (int, optional):
+                If vocab is None, threshold for the vocabulary. Defaults to 1.
+            window_size (int, optional):
+                Size of the windows. Defaults to 5.
+            window_shift (int, optional):
+                Shift of the windows. Defaults to None.
+
+        Raises:
+            ValueError:
+                if specified, window_shift has to be equal or smaller than
+                window_size, and both must be positive
+            ValueError:
+                cannot build a vocabulary from a file that does not contain the
+                word "train" in its name.
+        """
 
         if char_vocab is None and 'train' not in str(path):
             raise ValueError(
@@ -503,10 +633,19 @@ class NerDatasetChar(NerDataset):
         self.indexed_data: List[Tuple[List[int], List[int], List[List[int]]]]
         self.max_word_len: int
 
-        self.char_vocab: Optional[CharVocabulary] = char_vocab
+        self.char_vocab: Optional[CharVocabulary] = char_vocab  # type: ignore
         super().__init__(path, vocab, threshold, window_size, window_shift)
 
     def index_data(self) -> List[Tuple[List[int], List[int], List[List[int]]]]:
+        """
+        Builds self.indexed_data transforming words, labels and characters
+        into integers
+
+        Returns: List[Tuple[List[int], List[int], List[List[int]]]]:
+            A list of sentences. Each sentence is a tuple of a list of word 
+            indices, a list of label indices, and a list of lists of character
+            indices.
+        """
         self.char_vocab: CharVocabulary = CharVocabulary(
             self.sentences) if self.char_vocab is None else self.char_vocab
         data = list(
@@ -519,13 +658,18 @@ class NerDatasetChar(NerDataset):
                     for word in sentence[0]]), self.sentences))
         return data
 
-    def pad_char_sequence(self, chars: List[int], total: int):
+    def _pad_char_sequence(self, chars: List[int], total: int) -> List[int]:
         if len(chars) > total:
             return chars[:total]
         return chars + [self.char_vocab.pad] * (total - len(chars))
 
     def build_windows(
             self) -> List[Tuple[torch.Tensor, torch.Tensor, torch.Tensor]]:
+        """Builds fixed-size windows from the indexed data
+
+        Returns:
+            List[Tuple[Tensor, Tensor, Tensor]]: List of fixed-size windows
+        """
         windows: List[Tuple[torch.Tensor, torch.Tensor, torch.Tensor]] = []
         # self.max_word_len = max(len(w[0]) for w in self.sentences)
         self.max_word_len = 15
@@ -536,7 +680,7 @@ class NerDatasetChar(NerDataset):
                 word_window = word_ids[start:start + self.window_size]
                 label_window = label_ids[start:start + self.window_size]
                 chars_window = [
-                    self.pad_char_sequence(chars, total=self.max_word_len)
+                    self._pad_char_sequence(chars, total=self.max_word_len)
                     for chars in word_chars[start:start + self.window_size]
                 ]
                 # pad
@@ -546,7 +690,7 @@ class NerDatasetChar(NerDataset):
                     [self.vocab.get_label_id(self.vocab.pad_label)] *
                     (self.window_size - len(label_window)))
                 chars_window += (
-                    [self.pad_char_sequence([], self.max_word_len)] *
+                    [self._pad_char_sequence([], self.max_word_len)] *
                     (self.window_size - len(chars_window)))
                 # append
                 windows.append(
@@ -575,6 +719,32 @@ class NerDatasetPos(NerDataset):
         window_size: int = 100,
         window_shift: Optional[int] = None,
     ):
+        """Initialize a NerDatsetPos
+
+        Args:
+            path (Path, optional):
+                The path to load the data from.
+                Defaults to Path('data/train.tsv').
+            pos_tagger (stanza.Pipeline, optional):
+                The pos tagger to use. Defaults to None.
+            vocab (Vocabulary, optional):
+                Vocabulary to index the data. If none, build one.
+                Defaults to None.
+            threshold (int, optional):
+                If vocab is None, threshold for the vocabulary. Defaults to 1.
+            window_size (int, optional):
+                Size of the windows. Defaults to 5.
+            window_shift (int, optional):
+                Shift of the windows. Defaults to None.
+
+        Raises:
+            ValueError:
+                if specified, window_shift has to be equal or smaller than
+                window_size, and both must be positive
+            ValueError:
+                cannot build a vocabulary from a file that does not contain the
+                word "train" in its name.
+        """
 
         if pos_tagger is not None:
             self.pos_tagger: stanza.Pipeline = pos_tagger
@@ -661,7 +831,15 @@ class NerDatasetPos(NerDataset):
                 start += self.window_shift
         return windows
 
-    def human(self, idx: int):
+    def human(self, idx: int) -> Tuple[str, str, str]:
+        """Returns the sentence at a given index in a human-readable format
+
+        Args:
+            idx (int): the index of the sentence
+
+        Returns:
+            Tuple[str, str, str]: the human-readable sentence
+        """
         return (' '.join(self.sentences[idx][0]),
                 ' '.join(self.sentences[idx][1]),
                 ' '.join(self.sentences[idx][2]))
@@ -676,15 +854,27 @@ def get_dataloaders(
     batch_size_train: int = 128,
     batch_size_dev: int = 256
 ) -> Tuple[torch.utils.data.DataLoader, torch.utils.data.DataLoader]:
-    """Return the dataloaders from the given datasets
+    """Returns dataloaders
 
     Args:
-        trainset (NerDataset, optional): dataset for training
-        devset (NerDataset, optional): dataset for evaluation
-        batch_size (int, optional): Batch size. Defaults to 64.
+        vocab (Optional[Vocabulary], optional):
+            The vocabulary to use to build the datsets. Defaults to None.
+        trainset (Optional[NerDataset], optional):
+            The dataset for training. Defaults to None.
+        devset (Optional[NerDataset], optional):
+            The datset for evaluation. Defaults to None.
+        use_pos (bool, optional):
+            Wheter to use a NerDatsetPos. Defaults to False.
+        window_size (int, optional):
+            Window size of the vocabulary. Defaults to 100.
+        batch_size_train (int, optional):
+            Batch size for the dataloader for training. Defaults to 128.
+        batch_size_dev (int, optional):
+            Batch size for the dataloader for evaluation. Defaults to 256.
 
     Returns:
-        Tuple[Dataloader, Dataloader]: the dataloaders
+        Tuple[torch.utils.data.DataLoader, torch.utils.data.DataLoader]:
+            Trainloader and Testloader
     """
     if trainset is None or devset is None:
         trainset, devset = get_datasets(vocab,
@@ -700,7 +890,20 @@ def get_dataloaders(
 
 def get_datasets(vocab: Optional[Vocabulary] = None,
                  use_pos: bool = False,
-                 window_size: int = 100):
+                 window_size: int = 100) -> Tuple[NerDataset, NerDataset]:
+    """Returns datsets for training and testing
+
+    Args:
+        vocab (Optional[Vocabulary], optional):
+            Vocabulary to use to build the datsets. Defaults to None.
+        use_pos (bool, optional):
+            Whether to build NerDatasetPos. Defaults to False.
+        window_size (int, optional):
+            Window size to use. Defaults to 100.
+
+    Returns:
+        Tuple[NerDataset, NerDataset]: trainset and testset
+    """
     if use_pos:
         trainset: NerDataset = NerDatasetPos(config.TRAIN,
                                              vocab=vocab,

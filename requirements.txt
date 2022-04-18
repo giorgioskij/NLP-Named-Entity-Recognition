@@ -10,3 +10,4 @@ seqeval==1.2.2
 jupyter==1.0.0
 stanza==1.3.0
 torchinfo==1.6.5
+plotly==5.7.0
