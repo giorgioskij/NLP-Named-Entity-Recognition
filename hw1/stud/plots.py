@@ -1,16 +1,62 @@
 import plotly.express as px
+import pickle
+import pandas as pd
+import torch
+# import matplotlib.pyplot as plt
 
-hist = list(range(200))
-texts = [str(i) for i in hist]
+with open('../../model/history.pkl', 'rb') as f:
+    data = pickle.load(f)
 
-fig = px.line(y=hist,
-              text=texts,
-              title='culo vs cane',
-              labels={
-                  'x': 'culo',
-                  'y': 'cane'
-              })
+# train_loss, train_f1, eval_loss, eval_f1 = data
+data = torch.tensor(data)
+data = data.t()
 
-fig.update_traces(textposition='bottom right')
+df = pd.DataFrame(data.numpy(),
+                  columns=['Train loss', 'Train F1', 'Eval loss', 'Eval F1'])
 
-fig.show()
+names = ['Train', 'Eval']
+loss = px.line(
+    df,
+    x=list(range(len(data))),
+    y=['Train loss', 'Eval loss'],
+    # template='plotly_dark',
+    title='Loss over epochs',
+    labels={
+        'x': 'Epochs',
+        'value': 'Cross-entropy loss',
+    },
+)
+
+for idx, name in enumerate(names):
+    loss.data[idx].name = name
+
+loss.update_layout(legend=dict(yanchor='top',
+                               y=0.98,
+                               xanchor='right',
+                               x=0.99,
+                               title=''),
+                   title=dict(xanchor='center', x=0.5, yanchor='top', y=0.85))
+
+f1 = px.line(
+    df,
+    x=list(range(len(data))),
+    y=['Train F1', 'Eval F1'],
+    # template='plotly_dark',
+    title='F1-score over epochs',
+    labels={
+        'x': 'Epochs',
+        'value': 'F1-score',
+    },
+)
+for idx, name in enumerate(names):
+    f1.data[idx].name = name
+
+f1.update_layout(legend=dict(yanchor='bottom',
+                             y=0.02,
+                             xanchor='right',
+                             x=0.99,
+                             title=''),
+                 title=dict(xanchor='center', x=0.5, yanchor='top', y=0.85))
+
+loss.show()
+f1.show()

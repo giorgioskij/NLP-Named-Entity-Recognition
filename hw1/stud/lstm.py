@@ -15,7 +15,7 @@ from torch.nn import functional
 import torch.backends.cudnn
 from seqeval import metrics
 
-from torchcrf import CRF
+import torchcrf
 from . import dataset, config
 
 
@@ -362,11 +362,11 @@ def train(
         List[float]: History of the evaluation f1-score
     """
 
-    # torch.manual_seed(config.SEED)
-    # torch.use_deterministic_algorithms(True)
-    # torch.cuda.manual_seed(config.SEED)
-    # torch.backends.cudnn.deterministic = True
-    # torch.backends.cudnn.benchmark = False
+    torch.manual_seed(config.SEED)
+    torch.use_deterministic_algorithms(True)
+    torch.cuda.manual_seed(config.SEED)
+    torch.backends.cudnn.deterministic = True
+    torch.backends.cudnn.benchmark = False
 
     f1_train_hist = []
     f1_eval_hist = []
@@ -374,8 +374,8 @@ def train(
     loss_eval_hist = []
 
     if use_crf:
-        crf: Optional[nn.Module] = CRF(num_tags=14,
-                                       batch_first=True).to(params.device)
+        crf: Optional[nn.Module] = torchcrf.CRF(
+            num_tags=14, batch_first=True).to(params.device)
         crf_opt = torch.optim.SGD(crf.parameters(), lr=0.001)
     else:
         crf = None
@@ -461,7 +461,7 @@ def run_epoch(
     params: TrainParams,
     evaluate: bool = False,
     logic: bool = True,
-    crf: Optional[CRF] = None,
+    crf: Optional[torchcrf.CRF] = None,
     crf_opt: Optional[torch.optim.Optimizer] = None
 ) -> Tuple[float, float, float]:
     """Runs a single epoch on the given dataloader
@@ -566,7 +566,7 @@ def run_epoch(
         [[params.vocab.get_label(i) for i in predicted_labels]],
         average=params.f1_average)  # type: ignore
 
-    return accuracy, float(loss), f1
+    return accuracy, float(loss), f1, true_labels, predicted_labels
 
 
 def apply_logic(tags: torch.LongTensor) -> torch.Tensor:
@@ -694,16 +694,25 @@ def test(model: NerModel,
          dataloader: torch.utils.data.DataLoader,
          params: TrainParams,
          logic: bool = False,
-         crf: Optional[CRF] = None):
-    acc, loss, f1 = run_epoch(model, dataloader, params, True, logic, crf=crf)
+         crf: Optional[torchcrf.CRF] = None):
+    acc, loss, f1, true, predicted = run_epoch(model,
+                                               dataloader,
+                                               params,
+                                               True,
+                                               logic,
+                                               crf=crf)
 
     if params.verbose:
         print(f'Accuracy: {acc:.2%} | Loss: {loss:.4f} | F1: {f1:.2%}')
-    return acc, loss, f1
+    return acc, loss, f1, true, predicted
 
 
-def predict(model: nn.Module, vocab: dataset.Vocabulary,
-            tokens: List[List[str]], device: torch.device) -> List[List[str]]:
+def predict(model: NerModel,
+            vocab: dataset.Vocabulary,
+            tokens: List[List[str]],
+            device: torch.device,
+            window_size: int = 100,
+            crf: Optional[torchcrf.CRF] = None) -> List[List[str]]:
     """Predict a bunch of human-readable sentences
 
     Args:
@@ -715,13 +724,33 @@ def predict(model: nn.Module, vocab: dataset.Vocabulary,
 
     labels = []
     model.eval()
+    if crf is not None:
+        crf.eval()
     for sentence in tokens:
-        inputs = torch.tensor([vocab[word.lower()] for word in sentence
-                              ]).unsqueeze(0).to(device)
+        original_len = len(sentence)
+        indexed_sentence = [
+            vocab.get_word_id(word.lower()) for word in sentence
+        ]
+        indexed_sentence += [vocab.pad] * (window_size - len(indexed_sentence))
+        inputs = torch.tensor(indexed_sentence).unsqueeze(0).to(device)
+
+        # inputs = torch.tensor([vocab[word.lower()] for word in sentence
+        #   ]).unsqueeze(0).to(device)
+
         outputs = model(inputs)  # pylint: disable=all
-        predictions = torch.argmax(outputs, dim=-1).flatten()
+        if crf is not None:
+            outputs = outputs.reshape(inputs.shape[0], inputs.shape[1], -1)
+            outputs = torch.cat(
+                (outputs, torch.zeros(outputs.shape[0], outputs.shape[1],
+                                      1).to(device)),
+                dim=2)
+            predictions = crf.decode(outputs)[0]
+        else:
+            predictions = torch.argmax(outputs, dim=-1).flatten()
+
+        predictions = predictions[:original_len]
         str_predictions = [
-            vocab.get_label(p.item())  # type: ignore
+            vocab.get_label(int(p))  # type: ignore
             for p in predictions
         ]
         labels.append(str_predictions)

@@ -5,7 +5,8 @@ from typing import List, Optional
 import numpy as np
 import torch
 from model import Model  # type: ignore
-from . import nerdtagger, config, dataset, lstm
+import torchcrf
+from . import config, dataset, lstm
 
 
 def build_model(device: str) -> Model:
@@ -44,22 +45,34 @@ class StudentModel(Model):
         if device:
             self.device = torch.device(device)
 
-        self.vocab = dataset.Vocabulary(path=config.MODEL / 'vocab-glove.pkl')
+        self.vocab: dataset.Vocabulary = dataset.Vocabulary(path=config.MODEL /
+                                                            'vocab-glove.pkl')
 
-        self.model = lstm.NerModel(
-            n_classes=13,
-            embedding_dim=100,
-            vocab_size=len(self.vocab),
-            padding_idx=self.vocab.pad,
-            hidden_size=100,
-            bidirectional=True,
-        ).to(self.device)
+        self.model: lstm.NerModel = lstm.NerModel(n_classes=13,
+                                                  embedding_dim=100,
+                                                  vocab_size=len(self.vocab),
+                                                  padding_idx=self.vocab.pad,
+                                                  hidden_size=100,
+                                                  bidirectional=True,
+                                                  pretrained_emb=None).to(
+                                                      self.device)
+
+        self.crf: torchcrf.CRF = torchcrf.CRF(num_tags=14,
+                                              batch_first=True).to(self.device)
         self.model.load_state_dict(
-            torch.load(config.MODEL / '7385-glove-stacked-100h.pth',
+            torch.load(config.MODEL / '7572-stacked-100h-crf.pth',
                        map_location=self.device))
+
+        self.crf.load_state_dict(
+            torch.load(config.MODEL / 'crf-7572.pth', map_location=self.device))
 
     def predict(self, tokens: List[List[str]]) -> List[List[str]]:
 
         # return lstm.predict_char(self.model, self.vocab, self.char_vocab,
         #  tokens, self.device)
-        return lstm.predict(self.model, self.vocab, tokens, self.device)
+        return lstm.predict(self.model,
+                            self.vocab,
+                            tokens,
+                            self.device,
+                            window_size=100,
+                            crf=self.crf)
