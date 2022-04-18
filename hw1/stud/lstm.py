@@ -566,7 +566,7 @@ def run_epoch(
         [[params.vocab.get_label(i) for i in predicted_labels]],
         average=params.f1_average)  # type: ignore
 
-    return accuracy, float(loss), f1, true_labels, predicted_labels
+    return accuracy, float(loss), f1
 
 
 def apply_logic(tags: torch.LongTensor) -> torch.Tensor:
@@ -695,16 +695,11 @@ def test(model: NerModel,
          params: TrainParams,
          logic: bool = False,
          crf: Optional[torchcrf.CRF] = None):
-    acc, loss, f1, true, predicted = run_epoch(model,
-                                               dataloader,
-                                               params,
-                                               True,
-                                               logic,
-                                               crf=crf)
+    acc, loss, f1 = run_epoch(model, dataloader, params, True, logic, crf=crf)
 
     if params.verbose:
         print(f'Accuracy: {acc:.2%} | Loss: {loss:.4f} | F1: {f1:.2%}')
-    return acc, loss, f1, true, predicted
+    return acc, loss, f1
 
 
 def predict(model: NerModel,
