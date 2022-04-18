@@ -58,5 +58,7 @@ f1.update_layout(legend=dict(yanchor='bottom',
                              title=''),
                  title=dict(xanchor='center', x=0.5, yanchor='top', y=0.85))
 
+loss.write_image('../../notes/img/loss.jpeg')
 loss.show()
+f1.write_image('../../notes/img/f1.jpeg')
 f1.show()

@@ -59,6 +59,7 @@ class StudentModel(Model):
 
         self.crf: torchcrf.CRF = torchcrf.CRF(num_tags=14,
                                               batch_first=True).to(self.device)
+
         self.model.load_state_dict(
             torch.load(config.MODEL / '7572-stacked-100h-crf.pth',
                        map_location=self.device))
@@ -70,6 +71,7 @@ class StudentModel(Model):
 
         # return lstm.predict_char(self.model, self.vocab, self.char_vocab,
         #  tokens, self.device)
+
         return lstm.predict(self.model,
                             self.vocab,
                             tokens,
