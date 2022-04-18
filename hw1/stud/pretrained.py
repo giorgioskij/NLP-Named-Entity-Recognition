@@ -1,9 +1,6 @@
 """
-Build and train models that use pretrained word embeddings, like the ones from
-glove-wiki-gigaword-100
-
-the best results were achieved loading pretrained embeddings and fine-tuning
-them, with double_linear = False and hidden_dim of the lstm = 200
+The code in this file handles stuff related to pretrained word embeddings, like 
+the ones from glove-wiki-gigaword-100
 """
 
 from typing import List
@@ -52,7 +49,7 @@ def merge_pretrained_embeddings(save_stuff: bool = False,
     print('Loading pretrained glove embeddings')
     embeddings: KeyedVectors = gensim.downloader.load(
         'glove-wiki-gigaword-100')  # type: ignore
-    glove_count, emb_size = embeddings.vectors.shape
+    glove_count, emb_size = embeddings.vectors.shape  # type: ignore
 
     # set of words in the pretrained embeddings
     # glove_vocab: dataset.Vocabulary = dataset.Vocabulary(
@@ -63,15 +60,16 @@ def merge_pretrained_embeddings(save_stuff: bool = False,
     trainset: dataset.NerDataset = dataset.NerDataset(path=config.TRAIN,
                                                       threshold=2)
     our_vocab: dataset.Vocabulary = trainset.vocab
-    our_words: set[str] = {our_vocab[i] for i in range(len(our_vocab))}
+    our_words: set[str] = {our_vocab[i] for i in range(len(our_vocab))
+                          }  # type: ignore
 
     # how many words are in our vocabulary and not in the glove embeddings?
     only_our_words: set[str] = our_words - glove_words
     only_our_words_count: int = len(only_our_words)
 
     # add our words to the glove vocabulary (preserving the order)
-    new_wordlist: List[str] = embeddings.index_to_key.copy()
-    new_wordlist.extend(only_our_words)
+    new_wordlist: List[str] = embeddings.index_to_key.copy()  # type: ignore
+    new_wordlist.extend(only_our_words)  # type: ignore
 
     # make sure that the order has not changed
     assert new_wordlist[:glove_count] == embeddings.index_to_key
@@ -81,9 +79,10 @@ def merge_pretrained_embeddings(save_stuff: bool = False,
 
     # extend the pretrained embedding matrix with new untrained vectors
     # to match the size of the new vocabulary
-    vectors: np.ndarray = embeddings.vectors
+    vectors: np.ndarray = embeddings.vectors  # type: ignore
     rand_vectors: np.ndarray = np.random.rand(only_our_words_count, emb_size)
-    new_vectors: np.ndarray = np.concatenate((vectors, rand_vectors))
+    new_vectors: np.ndarray = np.concatenate(  # type: ignore
+        (vectors, rand_vectors))
 
     # make sure that the size is correct
     assert new_vectors.shape == (len(glove_words | our_words), emb_size)
@@ -178,8 +177,8 @@ def fine_tune(vocab: dataset.Vocabulary, model: lstm.NerModel):
     devset = dataset.NerDataset(path=config.DEV, vocab=vocab)
 
     # dataloaders
-    trainloader, devloader = dataset.get_dataloaders(trainset,
-                                                     devset,
+    trainloader, devloader = dataset.get_dataloaders(trainset=trainset,
+                                                     devset=devset,
                                                      batch_size_train=128,
                                                      batch_size_dev=1024)
 

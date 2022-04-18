@@ -1,5 +1,5 @@
 """
-Handles the generation of hyperparameters, and provides easy function to avoid
+Handles the generation of hyperparameters, and provides easy functions to avoid
 the repetition of boilerplate code. It does not contain any implementation, but
 rather calls to function with many arguments, so it can easily be ignored.
 

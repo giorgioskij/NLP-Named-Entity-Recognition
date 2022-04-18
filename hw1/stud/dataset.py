@@ -642,7 +642,7 @@ class NerDatasetChar(NerDataset):
         into integers
 
         Returns: List[Tuple[List[int], List[int], List[List[int]]]]:
-            A list of sentences. Each sentence is a tuple of a list of word 
+            A list of sentences. Each sentence is a tuple of a list of word
             indices, a list of label indices, and a list of lists of character
             indices.
         """

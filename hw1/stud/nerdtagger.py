@@ -1,3 +1,9 @@
+"""
+The code in this file was meant to make the code cleaner and less messy, but it
+only added complexity and boilerplate, so it is no longer used.
+It can be totally ingored (at least until a nice refactor is done sometime
+in the future).
+"""
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
@@ -53,6 +59,7 @@ class NerdTagger:
                 n_classes=13,
                 embedding_dim=100,
                 char_embedding_dim=50,
+                char_out_channels=50,
                 char_vocab=char_vocab,
                 vocab_size=len(vocab),
                 padding_idx=vocab.pad,
@@ -174,8 +181,8 @@ class NerdTagger:
             # self.vocab: dataset.Vocabulary = trainset.vocab
             devset = dataset.NerDataset(path=config.DEV, vocab=self.vocab)
 
-        trainloader, devloader = dataset.get_dataloaders(trainset,
-                                                         devset,
+        trainloader, devloader = dataset.get_dataloaders(trainset=trainset,
+                                                         devset=devset,
                                                          batch_size_train=128,
                                                          batch_size_dev=1024)
 
