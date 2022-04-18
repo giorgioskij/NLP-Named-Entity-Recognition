@@ -362,11 +362,11 @@ def train(
         List[float]: History of the evaluation f1-score
     """
 
-    torch.manual_seed(config.SEED)
-    torch.use_deterministic_algorithms(True)
-    torch.cuda.manual_seed(config.SEED)
-    torch.backends.cudnn.deterministic = True
-    torch.backends.cudnn.benchmark = False
+    # torch.manual_seed(config.SEED)
+    # torch.use_deterministic_algorithms(True)
+    # torch.cuda.manual_seed(config.SEED)
+    # torch.backends.cudnn.deterministic = True
+    # torch.backends.cudnn.benchmark = False
 
     f1_train_hist = []
     f1_eval_hist = []
