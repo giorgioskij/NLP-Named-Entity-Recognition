@@ -24,6 +24,8 @@ from stud import hypers
 
 device = config.DEVICE
 
+dataset = dataset.NerDataset()
+
 # pretrained.build_pretrained_embeddings(save_stuff=True,
 #                                        freeze=False,
 #                                        double_linear=True,

@@ -239,28 +239,12 @@ class NerModel(nn.Module):
                                     2 if bidirectional else hidden_size,
                                     out_features=n_classes)
 
-        if self.use_crf:
-            self.crf = torchcrf.CRF(num_tags=13, batch_first=True)
-
-        # extra stuff
-        # self.lstm2 = nn.LSTM(input_size=n_classes,
-        #                      hidden_size=50,
-        #                      batch_first=True,
-        #                      bidirectional=bidirectional,
-        #                      dropout=0.5)
-
-        # self.clf = nn.Linear(in_features=100, out_features=n_classes)
-
         self.dropout = nn.Dropout()
 
     def forward(self, x, pos_tags: Optional[torch.Tensor] = None):
 
         embeddings = self.embedding(x)
         embeddings = self.dropout(embeddings)
-
-        # for crf
-        # mask = x[x != self.padding_idx]
-        # print(f'emb: {embeddings.shape}')
 
         if self.use_pos and pos_tags is not None:
             oh: torch.Tensor = functional.one_hot(pos_tags, num_classes=17)
@@ -277,10 +261,6 @@ class NerModel(nn.Module):
 
         else:
             clf_out = self.linear(lstm_out)
-
-        # extra stuff
-        # lstm2_out, _ = self.lstm2(torch.relu(clf_out))
-        # clf_out = self.clf(lstm2_out)
 
         return clf_out
 
@@ -470,7 +450,6 @@ def run_epoch(model: NerModel,
 
         else:
             predictions = torch.argmax(outputs, dim=1)
-            print('why am i here')
             real_predictions = predictions[labels != params.vocab.pad_label_id]
 
         if evaluate and logic:
@@ -503,25 +482,6 @@ def run_epoch(model: NerModel,
         average=params.f1_average)  # type: ignore
 
     return accuracy, loss, f1
-
-
-# def apply_logic(tags: torch.Tensor) -> torch.Tensor:
-
-#     new_predictions: torch.Tensor = torch.zeros_like(tags).long()
-#     for i, sentence in enumerate(tags):
-#         for j, tag in enumerate(sentence):
-#             if not j:
-#                 if (6 <= tag <= 11):
-#                     new_predictions[i][j] = tag - 5
-#                 else:
-#                     new_predictions[i][j] = tag
-#                 new_predictions[i][j] = tag
-#             elif (6 <= tag <= 11) and (sentence[j - i] != (tag - 5)):
-#                 new_predictions[i][j] = tag - 5
-#             else:
-#                 new_predictions[i][i] = tag
-
-#     return new_predictions
 
 
 def apply_logic(tags: torch.LongTensor) -> torch.Tensor:

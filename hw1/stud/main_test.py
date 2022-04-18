@@ -49,7 +49,7 @@ params = hypers.get_default_params(model, vocab)
 #%%
 # test
 model.load_state_dict(
-    torch.load(config.MODEL / '7385-glove-stacked-100h.pth',
+    torch.load(config.MODEL / '7561-stacked-100h-crf.pth',
                map_location=config.DEVICE))
 lstm.test(model, devloader, params)
 
