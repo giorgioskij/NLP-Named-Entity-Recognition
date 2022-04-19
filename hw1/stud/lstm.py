@@ -248,6 +248,7 @@ class NerModel(nn.Module):
         """
         super().__init__()
 
+        self.n_classes: int = n_classes
         self.double_linear: bool = double_linear
         self.use_pos: bool = use_pos
         self.padding_idx: int = padding_idx
@@ -374,8 +375,9 @@ def train(
     loss_eval_hist = []
 
     if use_crf:
-        crf: Optional[nn.Module] = torchcrf.CRF(
-            num_tags=14, batch_first=True).to(params.device)
+        crf: Optional[nn.Module] = torchcrf.CRF(num_tags=model.n_classes + 1,
+                                                batch_first=True).to(
+                                                    params.device)
         crf_opt = torch.optim.SGD(crf.parameters(), lr=0.001)
     else:
         crf = None

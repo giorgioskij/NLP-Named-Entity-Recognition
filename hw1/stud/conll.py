@@ -11,7 +11,7 @@ import torch.utils.data
 from . import dataset, lstm, config, hypers
 
 
-def get_conll_dataloaders():
+def get_conll_dataloaders(vocab: dataset.Vocabulary):
     """
     Generate and return dataloaders for the conll-2003 dataset, if wanted
     with a custom vocabulary (needed for pretrained embeddings)
@@ -26,6 +26,7 @@ def get_conll_dataloaders():
     """
     trainset = dataset.NerDataset(path=config.DATA /
                                   Path('conll2003/train.txt'),
+                                  vocab=vocab,
                                   threshold=2,
                                   window_size=100,
                                   is_conll=True,
@@ -38,7 +39,7 @@ def get_conll_dataloaders():
     trainloader, devloader = dataset.get_dataloaders(trainset=trainset,
                                                      devset=devset,
                                                      batch_size_train=128,
-                                                     batch_size_dev=1024)
+                                                     batch_size_dev=256)
 
     return trainloader, devloader
 

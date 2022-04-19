@@ -10,11 +10,7 @@ from . import config, dataset, lstm
 
 
 def build_model(device: str) -> Model:
-    # STUDENT: return StudentModel()
-    # STUDENT: your model MUST be loaded on the device "device" indicates
     # return RandomBaseline()
-
-    print('building model')
     return StudentModel(device=device)
 
 
@@ -45,9 +41,11 @@ class StudentModel(Model):
         if device:
             self.device = torch.device(device)
 
+        # load glove vocabulary
         self.vocab: dataset.Vocabulary = dataset.Vocabulary(path=config.MODEL /
                                                             'vocab-glove.pkl')
 
+        # instantiate BiLSTM
         self.model: lstm.NerModel = lstm.NerModel(n_classes=13,
                                                   embedding_dim=100,
                                                   vocab_size=len(self.vocab),
@@ -56,22 +54,18 @@ class StudentModel(Model):
                                                   bidirectional=True,
                                                   pretrained_emb=None).to(
                                                       self.device)
-
+        # instantiate CRF model
         self.crf: torchcrf.CRF = torchcrf.CRF(num_tags=14,
                                               batch_first=True).to(self.device)
 
+        # load pretrained weights
         self.model.load_state_dict(
-            torch.load(config.MODEL / '7572-stacked-100h-crf.pth',
+            torch.load(config.MODEL / '7597-stacked-100h-crf.pth',
                        map_location=self.device))
-
         self.crf.load_state_dict(
-            torch.load(config.MODEL / 'crf-7572.pth', map_location=self.device))
+            torch.load(config.MODEL / 'crf-7597.pth', map_location=self.device))
 
     def predict(self, tokens: List[List[str]]) -> List[List[str]]:
-
-        # return lstm.predict_char(self.model, self.vocab, self.char_vocab,
-        #  tokens, self.device)
-
         return lstm.predict(self.model,
                             self.vocab,
                             tokens,

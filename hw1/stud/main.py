@@ -9,10 +9,7 @@ sys.path.append(str(Path(__file__).parent.parent))
 
 # pylint: disable=wrong-import-position
 import pickle
-from stud import dataset
-from stud import config
-from stud import lstm
-from stud import hypers
+from stud import dataset, config, lstm, hypers, conll
 
 device = config.DEVICE
 
@@ -22,8 +19,10 @@ with open(config.MODEL / 'glove-emb-vocab.pkl', 'rb') as f:
 # get dataloaders
 trainloader, devloader = dataset.get_dataloaders(use_pos=False,
                                                  vocab=vocab,
-                                                 window_size=50,
+                                                 window_size=100,
                                                  batch_size_train=128)
+
+# conll_trainloader, conll_devloader = conll.get_conll_dataloaders(vocab=vocab)
 
 # with char embedding
 # model = lstm.NerModelChar(n_classes=13,

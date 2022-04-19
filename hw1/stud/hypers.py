@@ -15,12 +15,13 @@ from torch import nn
 
 
 def get_conll_model(vocab):
-    model = lstm.NerModel(n_classes=9,
-                          embedding_dim=100,
-                          vocab_size=len(vocab),
-                          padding_idx=vocab.pad,
-                          hidden_size=100,
-                          bidirectional=True)
+    model: lstm.NerModel = lstm.NerModel(n_classes=9,
+                                         embedding_dim=100,
+                                         vocab_size=len(vocab),
+                                         padding_idx=vocab.pad,
+                                         hidden_size=100,
+                                         bidirectional=True,
+                                         pretrained_emb=None).to(config.DEVICE)
     return model
 
 
@@ -30,7 +31,8 @@ def get_conll_hypers(vocab):
                                          vocab_size=len(vocab),
                                          padding_idx=vocab.pad,
                                          hidden_size=100,
-                                         bidirectional=True).to(config.DEVICE)
+                                         bidirectional=True,
+                                         pretrained_emb=None).to(config.DEVICE)
 
     optimizer = torch.optim.SGD(model.parameters(), lr=0.001, momentum=0.9)
     loss_fn = nn.CrossEntropyLoss(ignore_index=vocab.pad_label_id,
