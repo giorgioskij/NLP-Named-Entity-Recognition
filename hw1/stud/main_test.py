@@ -18,15 +18,20 @@ import seaborn as sns
 import plotly.express as px
 import matplotlib.pyplot as plt
 
-from stud import dataset, config, lstm, hypers
+from stud import dataset, config, lstm, hypers, conll
 
 device = config.DEVICE
 
 vocab = dataset.Vocabulary(path=config.MODEL / 'vocab-glove.pkl')
+# for our dataset
 devset = dataset.NerDataset(path=config.DEV, vocab=vocab)
 devloader = DataLoader(devset, batch_size=64)
 
-model: lstm.NerModel = lstm.NerModel(n_classes=13,
+# for CoNNL-2003
+# _, devloader = conll.get_conll_dataloaders(vocab)
+
+n_classes = 9 if devloader.dataset.is_conll else 13
+model: lstm.NerModel = lstm.NerModel(n_classes=n_classes,
                                      embedding_dim=100,
                                      vocab_size=len(vocab),
                                      padding_idx=vocab.pad,
@@ -34,7 +39,7 @@ model: lstm.NerModel = lstm.NerModel(n_classes=13,
                                      bidirectional=True,
                                      pretrained_emb=None).to(config.DEVICE)
 params: lstm.TrainParams = hypers.get_default_params(model, vocab)
-crf: torchcrf.CRF = torchcrf.CRF(num_tags=14,
+crf: torchcrf.CRF = torchcrf.CRF(num_tags=n_classes + 1,
                                  batch_first=True).to(config.DEVICE)
 
 # load models from file
@@ -48,7 +53,14 @@ acc, loss, f1 = lstm.test(model, devloader, params, crf=crf)
 
 
 def read_dataset(path: str) -> Tuple[List[List[str]], List[List[str]]]:
+    """This function was copied here from evaluate.py just for convenience
 
+    Args:
+        path (str): path to read the datset from
+
+    Returns:
+        Tuple[List[List[str]], List[List[str]]]: sentences
+    """
     tokens_s = []
     labels_s = []
 
@@ -97,13 +109,3 @@ sns.heatmap(cm,
             yticklabels=target_names)
 fig.savefig('../../notes/img/cm.jpg', dpi=300)
 plt.show()
-
-# px.imshow(cm_norm,
-#           labels={'color': 'Accuracy'},
-#           x=target_names,
-#           y=target_names,
-#           text_auto=True,
-#           aspect='auto')
-# plt.ylabel('Actual')
-# plt.xlabel('Predicted')
-# plt.show(block=False)
