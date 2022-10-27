@@ -7,6 +7,7 @@ from typing import List, Tuple
 
 os.environ['CUBLAS_WORKSPACE_CONFIG'] = ':4096:8'
 sys.path.append(str(Path(__file__).parent.parent))
+# os.system('conda activate nlp2022-hw1')
 
 # pylint: disable=wrong-import-position
 import torchcrf
@@ -107,5 +108,5 @@ sns.heatmap(cm,
             fmt='.2f',
             xticklabels=target_names,
             yticklabels=target_names)
-fig.savefig('../../notes/img/cm.jpg', dpi=300)
+fig.savefig('notes/img/cm.jpg', dpi=300)
 plt.show()

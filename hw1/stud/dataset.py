@@ -3,7 +3,7 @@ Contains classes and functions for the management of the data, such as custom
 datasets which extend torch.util.data.Dataset, and custom vocabularies.
 """
 
-from typing import Dict, List, Optional, Tuple, Union, Iterable
+from typing import Dict, List, Optional, Set, Tuple, Union, Iterable
 from collections import Counter
 from pathlib import Path
 from tqdm import tqdm
@@ -264,6 +264,12 @@ class Vocabulary:
         self.pad_label_id: int = self.stol[self.pad_label]
         self.n_labels: int = len(self.ltos)
 
+    def replace_labels(self, new_labels: Set[str]):
+        self.ltos = sorted(list(new_labels) + [self.pad_label])
+        self.stol = {s: i for i, s in enumerate(self.ltos)}
+        self.pad_label_id = self.ltos.index(self.pad_label)
+        self.n_labels = len(self.ltos)
+
     def __contains__(self, word: str):
         return word in self.stoi
 
@@ -404,7 +410,8 @@ class NerDataset(torch.utils.data.Dataset):
                  window_size: int = 100,
                  window_shift: Optional[int] = None,
                  is_conll: bool = False,
-                 lower: bool = False):
+                 lower: bool = False,
+                 replace_labels: bool = False):
         """
         Build a Named Entity Recognition dataset from a .tsv file,
         which loads data as fixed-size windows
@@ -439,6 +446,7 @@ class NerDataset(torch.utils.data.Dataset):
         if vocab is None and 'train' not in str(path):
             raise ValueError('Careful, you are trying to build a vocabulary'
                              'on something that is not the training data')
+        self.replace_labels: bool = replace_labels
         self.path: Path = path
         self.is_conll: bool = is_conll
         self.lower: bool = lower
@@ -460,6 +468,12 @@ class NerDataset(torch.utils.data.Dataset):
         self.vocab: Vocabulary = (Vocabulary(self.sentences,
                                              threshold=self.threshold)
                                   if vocab is None else vocab)
+        if self.replace_labels:
+            labels: Set[str] = {
+                l for sentence in self.sentences for l in sentence[1]
+            }
+            self.vocab.replace_labels(labels)
+
         # this should become a subclass ConllNerDatatset
         if self.is_conll:
             labels: set[str] = {
@@ -583,6 +597,48 @@ class NerDataset(torch.utils.data.Dataset):
     def __getitem__(self, idx):
         return self.windows[idx]
 
+    def human(self, idx: int):
+        return (' '.join(self.sentences[idx][0]),
+                ' '.join(self.sentences[idx][1]))
+
+
+class NerDatasetWnut(NerDataset):
+    """Represent a Named Entity Recognition Dataset
+    """
+
+    def __init__(self,
+                 path: Path = config.TRAIN,
+                 vocab: Optional[Vocabulary] = None,
+                 lower: bool = True,
+                 threshold: int = 2):
+
+        super().__init__(path=path,
+                         vocab=vocab,
+                         replace_labels=True,
+                         lower=lower,
+                         threshold=threshold)
+
+    def load_data(self, path: Path) -> List[Tuple[List[str], List[str]]]:
+        words = []
+        labels = []
+        sentences = []
+        with open(path, 'r', encoding='utf-8') as f:
+            # strip lines, remove empty ones and the first
+            lines = list(map(str.strip, f.readlines()))
+            for line_str in tqdm(lines, desc='Reading data', total=len(lines)):
+                if line_str == '' and words and labels:
+                    sentences.append((words, labels))
+                    words = []
+                    labels = []
+                else:
+                    line: List[str] = line_str.split('\t')
+                    words.append(line[0].lower() if self.lower else line[0])
+                    labels.append(line[1])
+
+            if words and labels:
+                sentences.append((words, labels))
+        return sentences
+
 
 class NerDatasetChar(NerDataset):
     """
@@ -698,10 +754,6 @@ class NerDatasetChar(NerDataset):
                      torch.tensor(chars_window)))
                 start += self.window_shift
         return windows
-
-    def human(self, idx: int):
-        return (' '.join(self.sentences[idx][0]),
-                ' '.join(self.sentences[idx][1]))
 
 
 class NerDatasetPos(NerDataset):
